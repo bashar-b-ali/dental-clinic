@@ -2,7 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SectionList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useData } from '../context/DataContext';
+import { useLanguage } from '../i18n/LanguageContext';
 import Card from '../components/Card';
 import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
@@ -13,17 +15,19 @@ import { AppointmentStatus } from '../types';
 
 type FilterTab = 'all' | 'today' | 'upcoming' | 'completed';
 
-const FILTERS: { key: FilterTab; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'today', label: 'Today' },
-  { key: 'upcoming', label: 'Upcoming' },
-  { key: 'completed', label: 'Completed' },
-];
-
 export default function AppointmentsScreen() {
   const navigation = useNavigation<any>();
   const { appointments, patients } = useData();
+  const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
+
+  const FILTERS: { key: FilterTab; label: string }[] = [
+    { key: 'all', label: t('filterAll') },
+    { key: 'today', label: t('filterToday') },
+    { key: 'upcoming', label: t('filterUpcoming') },
+    { key: 'completed', label: t('filterCompleted') },
+  ];
 
   const filteredAppointments = useMemo(() => {
     const today = getToday();
@@ -60,20 +64,20 @@ export default function AppointmentsScreen() {
 
   const emptyConfig: Record<FilterTab, { title: string; message: string }> = {
     all: {
-      title: 'No Appointments',
-      message: 'Schedule your first appointment to get started.',
+      title: t('noAppointments'),
+      message: t('scheduleFirstAppointment'),
     },
     today: {
-      title: 'No Appointments Today',
-      message: 'You have no appointments scheduled for today.',
+      title: t('noAppointmentsTodayTitle'),
+      message: t('noAppointmentsTodayMsg'),
     },
     upcoming: {
-      title: 'No Upcoming Appointments',
-      message: 'There are no upcoming scheduled appointments.',
+      title: t('noUpcoming'),
+      message: t('noUpcomingMsg'),
     },
     completed: {
-      title: 'No Completed Appointments',
-      message: 'Completed appointments will appear here.',
+      title: t('noCompleted'),
+      message: t('noCompletedMsg'),
     },
   };
 
@@ -130,7 +134,7 @@ export default function AppointmentsScreen() {
               <>
                 <Ionicons name="medical-outline" size={ms(13)} color={colors.textMuted} />
                 <Text style={styles.cardTeethCount}>
-                  {item.teethWork.length} {item.teethWork.length === 1 ? 'tooth' : 'teeth'}
+                  {item.teethWork.length} {item.teethWork.length === 1 ? t('tooth') : t('teeth')}
                 </Text>
               </>
             )}
@@ -142,7 +146,7 @@ export default function AppointmentsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.filterContainer}>
         <FlatList
           data={FILTERS}
@@ -159,7 +163,7 @@ export default function AppointmentsScreen() {
           icon="calendar-outline"
           title={emptyConfig[activeFilter].title}
           message={emptyConfig[activeFilter].message}
-          actionLabel="Add Appointment"
+          actionLabel={t('addAppointment')}
           onAction={() => navigation.navigate('AddAppointment')}
         />
       ) : (

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../context/DataContext';
+import { useLanguage } from '../i18n/LanguageContext';
 import Card from '../components/Card';
 import { colors, spacing, fontSize, borderRadius, shadow } from '../utils/theme';
 import { wp, ms } from '../utils/responsive';
@@ -13,6 +14,7 @@ const screenWidth = Dimensions.get('window').width;
 
 export default function ReportsScreen() {
   const { appointments, payments, patients } = useData();
+  const { t } = useLanguage();
   const [period, setPeriod] = useState<Period>('month');
   const [referenceDate, setReferenceDate] = useState(getToday());
 
@@ -119,10 +121,10 @@ export default function ReportsScreen() {
   const incomeBarData = useMemo(() => {
     const maxVal = Math.max(income.revenue, income.expenses, income.collected, 1);
     return [
-      { label: 'Revenue', value: income.revenue, color: colors.primary, pct: (income.revenue / maxVal) * 100 },
-      { label: 'Expenses', value: income.expenses, color: colors.danger, pct: (income.expenses / maxVal) * 100 },
-      { label: 'Collected', value: income.collected, color: colors.success, pct: (income.collected / maxVal) * 100 },
-      { label: 'Outstanding', value: income.outstanding, color: colors.warning, pct: (Math.abs(income.outstanding) / maxVal) * 100 },
+      { label: t('revenue'), value: income.revenue, color: colors.primary, pct: (income.revenue / maxVal) * 100 },
+      { label: t('expenses'), value: income.expenses, color: colors.danger, pct: (income.expenses / maxVal) * 100 },
+      { label: t('collected'), value: income.collected, color: colors.success, pct: (income.collected / maxVal) * 100 },
+      { label: t('outstanding'), value: income.outstanding, color: colors.warning, pct: (Math.abs(income.outstanding) / maxVal) * 100 },
     ];
   }, [income]);
 
@@ -138,7 +140,7 @@ export default function ReportsScreen() {
               onPress={() => setPeriod(p)}
             >
               <Text style={[styles.pillText, period === p && styles.pillTextActive]}>
-                {p.charAt(0).toUpperCase() + p.slice(1)}
+                {p === 'day' ? t('today') : p === 'week' ? t('thisWeek') : t('thisMonthReport')}
               </Text>
             </TouchableOpacity>
           ))}
@@ -166,7 +168,7 @@ export default function ReportsScreen() {
               </View>
             </View>
             <Text style={styles.summaryValue}>{formatCurrency(income.revenue)}</Text>
-            <Text style={styles.summaryLabel}>Revenue</Text>
+            <Text style={styles.summaryLabel}>{t('revenue')}</Text>
           </Card>
         </View>
         <View style={styles.summaryHalf}>
@@ -177,7 +179,7 @@ export default function ReportsScreen() {
               </View>
             </View>
             <Text style={styles.summaryValue}>{formatCurrency(income.expenses)}</Text>
-            <Text style={styles.summaryLabel}>Expenses</Text>
+            <Text style={styles.summaryLabel}>{t('expenses')}</Text>
           </Card>
         </View>
         <View style={styles.summaryHalf}>
@@ -190,7 +192,7 @@ export default function ReportsScreen() {
             <Text style={[styles.summaryValue, { color: netIncome >= 0 ? colors.success : colors.danger }]}>
               {formatCurrency(netIncome)}
             </Text>
-            <Text style={styles.summaryLabel}>Net Income</Text>
+            <Text style={styles.summaryLabel}>{t('netIncome')}</Text>
           </Card>
         </View>
         <View style={styles.summaryHalf}>
@@ -201,7 +203,7 @@ export default function ReportsScreen() {
               </View>
             </View>
             <Text style={styles.summaryValue}>{formatCurrency(income.collected)}</Text>
-            <Text style={styles.summaryLabel}>Collected</Text>
+            <Text style={styles.summaryLabel}>{t('collected')}</Text>
           </Card>
         </View>
         <View style={styles.summaryHalf}>
@@ -212,7 +214,7 @@ export default function ReportsScreen() {
               </View>
             </View>
             <Text style={styles.summaryValue}>{formatCurrency(income.outstanding)}</Text>
-            <Text style={styles.summaryLabel}>Outstanding</Text>
+            <Text style={styles.summaryLabel}>{t('outstanding')}</Text>
           </Card>
         </View>
       </View>
@@ -221,7 +223,7 @@ export default function ReportsScreen() {
       <Card style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <Ionicons name="bar-chart" size={20} color={colors.primary} />
-          <Text style={styles.sectionTitle}>Income Overview</Text>
+          <Text style={styles.sectionTitle}>{t('incomeOverview')}</Text>
         </View>
         {incomeBarData.map((bar) => (
           <View key={bar.label} style={styles.barRow}>
@@ -243,24 +245,24 @@ export default function ReportsScreen() {
       <Card style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <Ionicons name="calendar" size={20} color={colors.primary} />
-          <Text style={styles.sectionTitle}>Appointment Stats</Text>
+          <Text style={styles.sectionTitle}>{t('appointmentStats')}</Text>
         </View>
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>{appointmentStats.total}</Text>
-            <Text style={styles.statLabel}>Total</Text>
+            <Text style={styles.statLabel}>{t('total')}</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={[styles.statNumber, { color: colors.success }]}>{appointmentStats.completed}</Text>
-            <Text style={styles.statLabel}>Completed</Text>
+            <Text style={styles.statLabel}>{t('completed')}</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={[styles.statNumber, { color: colors.danger }]}>{appointmentStats.cancelled}</Text>
-            <Text style={styles.statLabel}>Cancelled</Text>
+            <Text style={styles.statLabel}>{t('cancelled')}</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={[styles.statNumber, { color: colors.warning }]}>{appointmentStats.noShow}</Text>
-            <Text style={styles.statLabel}>No-Show</Text>
+            <Text style={styles.statLabel}>{t('noShow')}</Text>
           </View>
         </View>
         {appointmentStats.total > 0 && (
@@ -303,15 +305,15 @@ export default function ReportsScreen() {
           <View style={styles.legendRow}>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: colors.success }]} />
-              <Text style={styles.legendText}>{getPercentage(appointmentStats.completed, appointmentStats.total)}% Completed</Text>
+              <Text style={styles.legendText}>{getPercentage(appointmentStats.completed, appointmentStats.total)}{t('pctCompleted')}</Text>
             </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: colors.danger }]} />
-              <Text style={styles.legendText}>{getPercentage(appointmentStats.cancelled, appointmentStats.total)}% Cancelled</Text>
+              <Text style={styles.legendText}>{getPercentage(appointmentStats.cancelled, appointmentStats.total)}{t('pctCancelled')}</Text>
             </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: colors.warning }]} />
-              <Text style={styles.legendText}>{getPercentage(appointmentStats.noShow, appointmentStats.total)}% No-Show</Text>
+              <Text style={styles.legendText}>{getPercentage(appointmentStats.noShow, appointmentStats.total)}{t('pctNoShow')}</Text>
             </View>
           </View>
         )}
@@ -321,10 +323,10 @@ export default function ReportsScreen() {
       <Card style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <Ionicons name="medkit" size={20} color={colors.primary} />
-          <Text style={styles.sectionTitle}>Top Procedures</Text>
+          <Text style={styles.sectionTitle}>{t('topProcedures')}</Text>
         </View>
         {topProcedures.length === 0 ? (
-          <Text style={styles.emptyText}>No procedures recorded in this period</Text>
+          <Text style={styles.emptyText}>{t('noProceduresRecorded')}</Text>
         ) : (
           topProcedures.map(([procedure, count], index) => (
             <View key={procedure} style={styles.rankRow}>
@@ -352,10 +354,10 @@ export default function ReportsScreen() {
       <Card style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <Ionicons name="people" size={20} color={colors.primary} />
-          <Text style={styles.sectionTitle}>Top Patients by Revenue</Text>
+          <Text style={styles.sectionTitle}>{t('topPatientsByRevenue')}</Text>
         </View>
         {topPatients.length === 0 ? (
-          <Text style={styles.emptyText}>No patient revenue in this period</Text>
+          <Text style={styles.emptyText}>{t('noPatientRevenue')}</Text>
         ) : (
           topPatients.map((patient, index) => (
             <View key={`${patient.name}-${index}`} style={styles.rankRow}>

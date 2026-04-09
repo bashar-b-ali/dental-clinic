@@ -5,22 +5,24 @@ import { useData } from '../context/DataContext';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import { useLanguage } from '../i18n/LanguageContext';
 import { colors, spacing, fontSize, borderRadius } from '../utils/theme';
 import { wp } from '../utils/responsive';
 import { formatCurrency, getPatientBalance, getToday } from '../utils/helpers';
 
 type PaymentMethod = 'cash' | 'card' | 'transfer' | 'other';
 
-const PAYMENT_METHODS: { key: PaymentMethod; label: string; icon: string }[] = [
-  { key: 'cash', label: 'Cash', icon: 'cash-outline' },
-  { key: 'card', label: 'Card', icon: 'card-outline' },
-  { key: 'transfer', label: 'Transfer', icon: 'swap-horizontal-outline' },
-  { key: 'other', label: 'Other', icon: 'ellipsis-horizontal-outline' },
+const PAYMENT_METHOD_KEYS: { key: PaymentMethod; labelKey: string; icon: string }[] = [
+  { key: 'cash', labelKey: 'cash', icon: 'cash-outline' },
+  { key: 'card', labelKey: 'card', icon: 'card-outline' },
+  { key: 'transfer', labelKey: 'transfer', icon: 'swap-horizontal-outline' },
+  { key: 'other', labelKey: 'catOther', icon: 'ellipsis-horizontal-outline' },
 ];
 
 export default function AddPaymentScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const { t } = useLanguage();
   const { patientId, appointmentId } = route.params;
   const { patients, appointments, payments, addPayment } = useData();
 
@@ -46,12 +48,12 @@ export default function AddPaymentScreen() {
   const handleSave = async () => {
     const numericAmount = parseFloat(amount);
     if (!amount || isNaN(numericAmount) || numericAmount <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid payment amount greater than 0.');
+      Alert.alert(t('invalidAmount'), t('invalidAmountMsg'));
       return;
     }
 
     if (!date) {
-      Alert.alert('Missing Date', 'Please enter a payment date.');
+      Alert.alert(t('missingDate'), t('missingDateMsg'));
       return;
     }
 
@@ -67,7 +69,7 @@ export default function AddPaymentScreen() {
       });
       navigation.goBack();
     } catch (error) {
-      Alert.alert('Error', 'Failed to save payment. Please try again.');
+      Alert.alert(t('error'), t('failedToSavePayment'));
     } finally {
       setSaving(false);
     }
@@ -76,7 +78,7 @@ export default function AddPaymentScreen() {
   if (!patient) {
     return (
       <View style={styles.container}>
-        <Text style={styles.errorText}>Patient not found.</Text>
+        <Text style={styles.errorText}>{t('patientNotFound')}</Text>
       </View>
     );
   }
@@ -98,12 +100,12 @@ export default function AddPaymentScreen() {
           <View style={styles.patientInfo}>
             <Text style={styles.patientName}>{patient.name}</Text>
             <Text style={styles.patientSub}>
-              Charged: {formatCurrency(totalCharged)} | Paid: {formatCurrency(totalPaid)}
+              {t('charged')}: {formatCurrency(totalCharged)} | {t('paid')}: {formatCurrency(totalPaid)}
             </Text>
           </View>
         </View>
         <View style={styles.balanceBanner}>
-          <Text style={styles.balanceBannerLabel}>Current Balance</Text>
+          <Text style={styles.balanceBannerLabel}>{t('currentBalance')}</Text>
           <Text
             style={[
               styles.balanceBannerValue,
@@ -123,7 +125,7 @@ export default function AddPaymentScreen() {
             onPress={() => handleQuickAmount('full')}
             activeOpacity={0.7}
           >
-            <Text style={styles.quickButtonText}>Pay Full Balance</Text>
+            <Text style={styles.quickButtonText}>{t('payFullBalance')}</Text>
             <Text style={styles.quickButtonAmount}>{formatCurrency(balance)}</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -141,7 +143,7 @@ export default function AddPaymentScreen() {
 
       {/* Amount Input */}
       <Input
-        label="Amount"
+        label={t('amount')}
         placeholder="0.00"
         value={amount}
         onChangeText={setAmount}
@@ -150,16 +152,16 @@ export default function AddPaymentScreen() {
 
       {/* Date Input */}
       <Input
-        label="Date"
+        label={t('dateLabel')}
         placeholder="YYYY-MM-DD"
         value={date}
         onChangeText={setDate}
       />
 
       {/* Payment Method */}
-      <Text style={styles.fieldLabel}>Payment Method</Text>
+      <Text style={styles.fieldLabel}>{t('paymentMethod')}</Text>
       <View style={styles.methodRow}>
-        {PAYMENT_METHODS.map((m) => (
+        {PAYMENT_METHOD_KEYS.map((m) => (
           <TouchableOpacity
             key={m.key}
             style={[styles.methodPill, method === m.key && styles.methodPillActive]}
@@ -172,7 +174,7 @@ export default function AddPaymentScreen() {
                 method === m.key && styles.methodPillTextActive,
               ]}
             >
-              {m.label}
+              {t(m.labelKey)}
             </Text>
           </TouchableOpacity>
         ))}
@@ -180,8 +182,8 @@ export default function AddPaymentScreen() {
 
       {/* Notes */}
       <Input
-        label="Notes (optional)"
-        placeholder="Add any notes about this payment..."
+        label={t('notesOptional')}
+        placeholder={t('addPaymentNotes')}
         value={notes}
         onChangeText={setNotes}
         multiline
@@ -191,7 +193,7 @@ export default function AddPaymentScreen() {
 
       {/* Save Button */}
       <Button
-        title="Save Payment"
+        title={t('savePayment')}
         onPress={handleSave}
         loading={saving}
         disabled={saving}

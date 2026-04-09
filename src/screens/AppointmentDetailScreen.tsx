@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, Image } fr
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useData } from '../context/DataContext';
+import { useLanguage } from '../i18n/LanguageContext';
 import Card from '../components/Card';
 import StatusBadge from '../components/StatusBadge';
 import Button from '../components/Button';
@@ -17,6 +18,7 @@ export default function AppointmentDetailScreen() {
   const route = useRoute<any>();
   const { appointmentId } = route.params;
   const { appointments, patients, patientFiles, updateAppointment, deleteAppointment } = useData();
+  const { t } = useLanguage();
 
   const appointment = appointments.find((a) => a.id === appointmentId);
 
@@ -24,7 +26,7 @@ export default function AppointmentDetailScreen() {
     return (
       <View style={styles.centered}>
         <Ionicons name="alert-circle-outline" size={48} color={colors.textMuted} />
-        <Text style={styles.notFoundText}>Appointment not found</Text>
+        <Text style={styles.notFoundText}>{t('appointmentNotFound')}</Text>
       </View>
     );
   }
@@ -42,13 +44,13 @@ export default function AppointmentDetailScreen() {
 
   const handleStatusChange = (newStatus: AppointmentStatus) => {
     const labels: Record<string, string> = {
-      completed: 'Mark as Completed',
-      cancelled: 'Cancel Appointment',
-      'no-show': 'Mark as No-Show',
+      completed: t('markCompleted'),
+      cancelled: t('cancelAppointment'),
+      'no-show': t('markNoShow'),
     };
 
-    Alert.alert(labels[newStatus], 'Are you sure you want to change the status?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(labels[newStatus], t('changeStatusConfirm'), [
+      { text: t('cancel'), style: 'cancel' },
       {
         text: 'Confirm',
         style: newStatus === 'cancelled' ? 'destructive' : 'default',
@@ -61,12 +63,12 @@ export default function AppointmentDetailScreen() {
 
   const handleDelete = () => {
     Alert.alert(
-      'Delete Appointment',
-      'This action cannot be undone. Are you sure you want to delete this appointment?',
+      t('deleteAppointment'),
+      t('deleteAppointmentMsg'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('delete'),
           style: 'destructive',
           onPress: async () => {
             await deleteAppointment(appointment.id);
@@ -86,7 +88,7 @@ export default function AppointmentDetailScreen() {
         {status === 'scheduled' && (
           <>
             <Button
-              title="Mark Complete"
+              title={t('markCompleted')}
               variant="primary"
               size="sm"
               icon={<Ionicons name="checkmark-circle-outline" size={16} color="#fff" />}
@@ -94,7 +96,7 @@ export default function AppointmentDetailScreen() {
               style={styles.statusButton}
             />
             <Button
-              title="No-Show"
+              title={t('markNoShow')}
               variant="secondary"
               size="sm"
               icon={<Ionicons name="eye-off-outline" size={16} color={colors.primary} />}
@@ -102,7 +104,7 @@ export default function AppointmentDetailScreen() {
               style={styles.statusButton}
             />
             <Button
-              title="Cancel"
+              title={t('cancelAppointment')}
               variant="danger"
               size="sm"
               icon={<Ionicons name="close-circle-outline" size={16} color={colors.danger} />}
@@ -113,7 +115,7 @@ export default function AppointmentDetailScreen() {
         )}
         {status === 'completed' && (
           <Button
-            title="Cancel"
+            title={t('cancelAppointment')}
             variant="danger"
             size="sm"
             icon={<Ionicons name="close-circle-outline" size={16} color={colors.danger} />}
@@ -124,7 +126,7 @@ export default function AppointmentDetailScreen() {
         {status === 'no-show' && (
           <>
             <Button
-              title="Mark Complete"
+              title={t('markCompleted')}
               variant="primary"
               size="sm"
               icon={<Ionicons name="checkmark-circle-outline" size={16} color="#fff" />}
@@ -132,7 +134,7 @@ export default function AppointmentDetailScreen() {
               style={styles.statusButton}
             />
             <Button
-              title="Cancel"
+              title={t('cancelAppointment')}
               variant="danger"
               size="sm"
               icon={<Ionicons name="close-circle-outline" size={16} color={colors.danger} />}
@@ -173,7 +175,7 @@ export default function AppointmentDetailScreen() {
           >
             <View style={styles.sectionTitleRow}>
               <Ionicons name="person-outline" size={18} color={colors.primary} />
-              <Text style={styles.sectionTitle}>Patient</Text>
+              <Text style={styles.sectionTitle}>{t('sectionPatient')}</Text>
               <Ionicons
                 name="chevron-forward"
                 size={16}
@@ -207,17 +209,17 @@ export default function AppointmentDetailScreen() {
           <Card>
             <View style={styles.sectionTitleRow}>
               <Ionicons name="document-text-outline" size={18} color={colors.primary} />
-              <Text style={styles.sectionTitle}>Clinical Notes</Text>
+              <Text style={styles.sectionTitle}>{t('clinicalNotes')}</Text>
             </View>
             {appointment.chiefComplaint ? (
               <View style={styles.noteBlock}>
-                <Text style={styles.noteLabel}>Chief Complaint</Text>
+                <Text style={styles.noteLabel}>{t('chiefComplaint')}</Text>
                 <Text style={styles.noteValue}>{appointment.chiefComplaint}</Text>
               </View>
             ) : null}
             {appointment.diagnosis ? (
               <View style={styles.noteBlock}>
-                <Text style={styles.noteLabel}>Diagnosis</Text>
+                <Text style={styles.noteLabel}>{t('diagnosis')}</Text>
                 <Text style={styles.noteValue}>{appointment.diagnosis}</Text>
               </View>
             ) : null}
@@ -229,7 +231,7 @@ export default function AppointmentDetailScreen() {
           <Card>
             <View style={styles.sectionTitleRow}>
               <Ionicons name="medical-outline" size={18} color={colors.primary} />
-              <Text style={styles.sectionTitle}>Tooth Chart</Text>
+              <Text style={styles.sectionTitle}>{t('sectionToothChart')}</Text>
             </View>
             <ToothChart
               selectedTeeth={selectedTeeth}
@@ -244,7 +246,7 @@ export default function AppointmentDetailScreen() {
           <Card>
             <View style={styles.sectionTitleRow}>
               <Ionicons name="construct-outline" size={18} color={colors.primary} />
-              <Text style={styles.sectionTitle}>Procedures</Text>
+              <Text style={styles.sectionTitle}>{t('procedures')}</Text>
             </View>
             {appointment.teethWork.map((tw, index) => (
               <View
@@ -271,13 +273,13 @@ export default function AppointmentDetailScreen() {
           <Card>
             <View style={styles.sectionTitleRow}>
               <Ionicons name="cube-outline" size={18} color={colors.primary} />
-              <Text style={styles.sectionTitle}>Materials Used</Text>
+              <Text style={styles.sectionTitle}>{t('sectionMaterials')}</Text>
             </View>
             <View style={styles.tableHeader}>
-              <Text style={[styles.tableHeaderCell, styles.tableCellName]}>Material</Text>
-              <Text style={[styles.tableHeaderCell, styles.tableCellQty]}>Qty</Text>
-              <Text style={[styles.tableHeaderCell, styles.tableCellCost]}>Unit Cost</Text>
-              <Text style={[styles.tableHeaderCell, styles.tableCellTotal]}>Total</Text>
+              <Text style={[styles.tableHeaderCell, styles.tableCellName]}>{t('catMaterial')}</Text>
+              <Text style={[styles.tableHeaderCell, styles.tableCellQty]}>{t('qty')}</Text>
+              <Text style={[styles.tableHeaderCell, styles.tableCellCost]}>{t('unitCost')}</Text>
+              <Text style={[styles.tableHeaderCell, styles.tableCellTotal]}>{t('total')}</Text>
             </View>
             {appointment.materialsUsed.map((mat, index) => (
               <View
@@ -300,7 +302,7 @@ export default function AppointmentDetailScreen() {
               </View>
             ))}
             <View style={styles.tableTotalRow}>
-              <Text style={styles.tableTotalLabel}>Materials Total</Text>
+              <Text style={styles.tableTotalLabel}>{t('materialsTotal')}</Text>
               <Text style={styles.tableTotalValue}>{formatCurrency(materialsTotal)}</Text>
             </View>
           </Card>
@@ -310,17 +312,17 @@ export default function AppointmentDetailScreen() {
         <Card>
           <View style={styles.sectionTitleRow}>
             <Ionicons name="cash-outline" size={18} color={colors.primary} />
-            <Text style={styles.sectionTitle}>Financial Summary</Text>
+            <Text style={styles.sectionTitle}>{t('financialSummary')}</Text>
           </View>
 
           <View style={styles.financeRow}>
-            <Text style={styles.financeLabel}>Procedure Fee</Text>
+            <Text style={styles.financeLabel}>{t('procedureFee')}</Text>
             <Text style={styles.financeValue}>{formatCurrency(appointment.procedureFee)}</Text>
           </View>
 
           {materialsTotal > 0 && (
             <View style={styles.financeRow}>
-              <Text style={styles.financeLabel}>Materials</Text>
+              <Text style={styles.financeLabel}>{t('materials')}</Text>
               <Text style={styles.financeValue}>{formatCurrency(materialsTotal)}</Text>
             </View>
           )}
@@ -338,21 +340,21 @@ export default function AppointmentDetailScreen() {
           <View style={styles.financeDivider} />
 
           <View style={styles.financeRow}>
-            <Text style={styles.financeTotalLabel}>TOTAL</Text>
+            <Text style={styles.financeTotalLabel}>{t('totalUpper')}</Text>
             <Text style={styles.financeTotalValue}>{formatCurrency(total)}</Text>
           </View>
 
           <View style={styles.financeSubDivider} />
 
           <View style={styles.financeRow}>
-            <Text style={styles.financeLabel}>Amount Paid</Text>
+            <Text style={styles.financeLabel}>{t('amountPaid')}</Text>
             <Text style={[styles.financeValue, { color: colors.success }]}>
               {formatCurrency(appointment.amountPaid)}
             </Text>
           </View>
 
           <View style={styles.financeRow}>
-            <Text style={styles.financeLabel}>Balance Remaining</Text>
+            <Text style={styles.financeLabel}>{t('balanceRemaining')}</Text>
             <Text
               style={[
                 styles.financeValue,
@@ -369,7 +371,7 @@ export default function AppointmentDetailScreen() {
           <Card>
             <View style={styles.sectionTitleRow}>
               <Ionicons name="chatbox-ellipses-outline" size={18} color={colors.primary} />
-              <Text style={styles.sectionTitle}>Notes</Text>
+              <Text style={styles.sectionTitle}>{t('sectionNotes')}</Text>
             </View>
             <Text style={styles.notesText}>{appointment.notes}</Text>
           </Card>
@@ -378,7 +380,7 @@ export default function AppointmentDetailScreen() {
         {/* Files & Images */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
-            <Ionicons name="images-outline" size={18} color={colors.primary} /> Files & Images
+            <Ionicons name="images-outline" size={18} color={colors.primary} /> {t('filesAndImages')}
           </Text>
           <Card>
             {(() => {
@@ -410,7 +412,7 @@ export default function AppointmentDetailScreen() {
                     <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
                       <Ionicons name="camera-outline" size={28} color={colors.textMuted} />
                       <Text style={{ fontSize: fontSize.sm, color: colors.textMuted, marginTop: spacing.xs }}>
-                        No files linked to this appointment
+                        {t('noFilesLinked')}
                       </Text>
                     </View>
                   )}
@@ -438,7 +440,7 @@ export default function AppointmentDetailScreen() {
             >
               <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
               <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: colors.primary }}>
-                Upload / Manage Files
+                {t('uploadManageFiles')}
               </Text>
             </TouchableOpacity>
           </Card>
@@ -448,7 +450,7 @@ export default function AppointmentDetailScreen() {
         <View style={styles.actionButtons}>
           {balance > 0 && (
             <Button
-              title="Record Payment"
+              title={t('recordPayment')}
               variant="primary"
               icon={<Ionicons name="wallet-outline" size={18} color="#fff" />}
               onPress={() =>
@@ -462,7 +464,7 @@ export default function AppointmentDetailScreen() {
           )}
 
           <Button
-            title="Edit Appointment"
+            title={t('editAppointment')}
             variant="secondary"
             icon={<Ionicons name="create-outline" size={18} color={colors.primary} />}
             onPress={() => navigation.navigate('AddAppointment', { appointment })}
@@ -470,7 +472,7 @@ export default function AppointmentDetailScreen() {
           />
 
           <Button
-            title="Delete Appointment"
+            title={t('deleteAppointment')}
             variant="danger"
             icon={<Ionicons name="trash-outline" size={18} color={colors.danger} />}
             onPress={handleDelete}

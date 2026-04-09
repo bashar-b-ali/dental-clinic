@@ -22,7 +22,10 @@
         "backgroundColor": "#E8F4FD"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.mobo.dental"
+      "package": "com.mobo.dental",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -35,6 +38,11 @@
           "cameraPermission": "MoBo Dental needs access to your camera to take patient photos."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "bfb4535f-d970-4f48-9d41-62e666dfc751"
+      }
+    }
   }
 }

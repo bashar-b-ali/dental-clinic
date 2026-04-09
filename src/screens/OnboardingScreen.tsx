@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useData } from '../context/DataContext';
+import { useLanguage } from '../i18n/LanguageContext';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import { colors, spacing, fontSize, borderRadius } from '../utils/theme';
@@ -12,6 +13,7 @@ import { generateId } from '../utils/helpers';
 
 export default function OnboardingScreen() {
   const { setDoctor, completeOnboarding, importData } = useData();
+  const { t } = useLanguage();
 
   const [name, setName] = useState('');
   const [clinicName, setClinicName] = useState('');
@@ -23,7 +25,7 @@ export default function OnboardingScreen() {
   const handleGetStarted = async () => {
     const trimmedName = name.trim();
     if (!trimmedName) {
-      setNameError('Please enter your name');
+      setNameError(t('pleaseEnterName'));
       return;
     }
     setNameError('');
@@ -39,7 +41,7 @@ export default function OnboardingScreen() {
       await setDoctor(doctor);
       await completeOnboarding();
     } catch (error) {
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      Alert.alert(t('error'), t('somethingWentWrong'));
     } finally {
       setLoading(false);
     }
@@ -63,16 +65,16 @@ export default function OnboardingScreen() {
 
       if (!data.doctor || !data.patients || !data.appointments || !data.payments) {
         Alert.alert(
-          'Invalid File',
-          'The selected file does not contain valid MoBo data. Please ensure it has doctor, patients, appointments, and payments.'
+          t('invalidFile'),
+          t('invalidFileMsg')
         );
         return;
       }
 
       await importData(data);
-      Alert.alert('Success', 'Data imported successfully!');
+      Alert.alert(t('done'), t('importSuccess'));
     } catch (error) {
-      Alert.alert('Import Failed', 'Could not read or parse the selected file. Please ensure it is a valid JSON file.');
+      Alert.alert(t('importFailed'), t('importFailedMsg'));
     } finally {
       setImporting(false);
     }
@@ -97,17 +99,17 @@ export default function OnboardingScreen() {
               resizeMode="contain"
             />
           </View>
-          <Text style={styles.title}>Welcome to MoBo</Text>
+          <Text style={styles.title}>{t('welcomeToMobo')}</Text>
           <Text style={styles.subtitle}>
-            Your smart dental practice companion.{'\n'}Let's get you set up in seconds.
+            {t('onboardingSubtitle')}
           </Text>
         </View>
 
         {/* Form area */}
         <View style={styles.form}>
           <Input
-            label="Doctor's Name"
-            placeholder="e.g. Dr. Sharma"
+            label={t('doctorNameLabel')}
+            placeholder={t('doctorNamePlaceholder')}
             value={name}
             onChangeText={(text) => {
               setName(text);
@@ -119,16 +121,16 @@ export default function OnboardingScreen() {
           />
 
           <Input
-            label="Clinic Name (optional)"
-            placeholder="e.g. Smile Dental Clinic"
+            label={t('clinicNameOnboarding')}
+            placeholder={t('clinicPlaceholder')}
             value={clinicName}
             onChangeText={setClinicName}
             autoCapitalize="words"
           />
 
           <Input
-            label="Phone (optional)"
-            placeholder="e.g. 9876543210"
+            label={t('phone')}
+            placeholder={t('phonePlaceholderOnboarding')}
             value={phone}
             onChangeText={setPhone}
             keyboardType="phone-pad"
@@ -136,7 +138,7 @@ export default function OnboardingScreen() {
 
           <View style={styles.buttonGroup}>
             <Button
-              title="Get Started"
+              title={t('getStarted')}
               onPress={handleGetStarted}
               variant="primary"
               size="lg"
@@ -147,12 +149,12 @@ export default function OnboardingScreen() {
 
             <View style={styles.dividerRow}>
               <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
+              <Text style={styles.dividerText}>{t('or')}</Text>
               <View style={styles.dividerLine} />
             </View>
 
             <Button
-              title="Import Existing Data"
+              title={t('importExistingData')}
               onPress={handleImport}
               variant="secondary"
               size="lg"

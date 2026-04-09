@@ -14,7 +14,9 @@
       "Bash(npm install:*)",
       "Bash(npm list:*)",
       "Bash(grep:*)",
-      "Bash(ls -la /d/Projects/git/mobo/.git*)"
+      "Bash(ls -la /d/Projects/git/mobo/.git*)",
+      "Bash(node scripts/fix-adaptive-icon.js)",
+      "Bash(npm uninstall:*)"
     ]
   }
 }

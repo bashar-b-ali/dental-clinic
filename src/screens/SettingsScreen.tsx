@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { useData } from '../context/DataContext';
+import { useLanguage } from '../i18n/LanguageContext';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Input from '../components/Input';
@@ -13,6 +15,8 @@ import { colors, spacing, fontSize, borderRadius, shadow } from '../utils/theme'
 import { formatDate, getPatientName } from '../utils/helpers';
 import { wp } from '../utils/responsive';
 import * as storage from '../utils/storage';
+import { clearPasswordHash } from '../utils/auth';
+import { usePasswordAction } from '../navigation/AppNavigator';
 import * as XLSX from 'xlsx';
 
 const APP_VERSION = '1.0.0';
@@ -20,6 +24,9 @@ const APP_VERSION = '1.0.0';
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
   const { doctor, patients, appointments, payments, patientFiles, setDoctor, mergeData, refreshData } = useData();
+  const { t, language, setLanguage } = useLanguage();
+  const { onChangePassword } = usePasswordAction();
+  const insets = useSafeAreaInsets();
 
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(doctor?.name ?? '');
@@ -30,7 +37,7 @@ export default function SettingsScreen() {
   const handleSaveProfile = async () => {
     if (!doctor) return;
     if (!editName.trim()) {
-      Alert.alert('Error', 'Name is required.');
+      Alert.alert(t('error'), t('pleaseSelectPatient'));
       return;
     }
     await setDoctor({
@@ -59,7 +66,7 @@ export default function SettingsScreen() {
       await FileSystem.writeAsStringAsync(filePath, json, { encoding: FileSystem.EncodingType.UTF8 });
       await Sharing.shareAsync(filePath);
     } catch (error: any) {
-      Alert.alert('Export Failed', error.message || 'An error occurred while exporting data.');
+      Alert.alert(t('error'), error.message || 'An error occurred while exporting data.');
     } finally {
       setExporting(false);
     }
@@ -71,7 +78,6 @@ export default function SettingsScreen() {
       const data = await storage.getAllData();
       const wb = XLSX.utils.book_new();
 
-      // Patients sheet
       const patientsData = data.patients.map((p) => ({
         Name: p.name,
         Phone: p.phone || '',
@@ -82,7 +88,6 @@ export default function SettingsScreen() {
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(patientsData), 'Patients');
 
-      // Appointments sheet with flattened data
       const aptsData = data.appointments.map((a) => ({
         Date: a.date,
         Time: a.time,
@@ -90,7 +95,7 @@ export default function SettingsScreen() {
         Status: a.status,
         Complaint: a.chiefComplaint || '',
         Diagnosis: a.diagnosis || '',
-        Teeth: a.teethWork.map((t) => `#${t.toothNumber}: ${t.procedure}`).join('; '),
+        Teeth: a.teethWork.map((tw) => `#${tw.toothNumber}: ${tw.procedure}`).join('; '),
         Materials: a.materialsUsed.map((m) => `${m.name} x${m.quantity}`).join('; '),
         ProcedureFee: a.procedureFee,
         MaterialsCost: a.materialsUsed.reduce((s, m) => s + m.quantity * m.unitCost, 0),
@@ -99,7 +104,6 @@ export default function SettingsScreen() {
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(aptsData), 'Appointments');
 
-      // Payments sheet
       const paysData = data.payments.map((p) => ({
         Date: p.date,
         Patient: getPatientName(p.patientId, data.patients),
@@ -115,7 +119,7 @@ export default function SettingsScreen() {
       await FileSystem.writeAsStringAsync(filePath, base64, { encoding: FileSystem.EncodingType.Base64 });
       await Sharing.shareAsync(filePath);
     } catch (error: any) {
-      Alert.alert('Export Failed', error.message || 'An error occurred while exporting data.');
+      Alert.alert(t('error'), error.message || 'An error occurred while exporting data.');
     } finally {
       setExporting(false);
     }
@@ -131,7 +135,7 @@ export default function SettingsScreen() {
       const data = JSON.parse(content);
 
       if (!data.patients || !data.appointments || !data.payments) {
-        Alert.alert('Invalid File', 'The selected file does not contain valid dental app data.');
+        Alert.alert(t('error'), 'The selected file does not contain valid dental app data.');
         return;
       }
 
@@ -139,16 +143,16 @@ export default function SettingsScreen() {
       const attachmentCount = data.fileAttachments?.length ?? 0;
 
       Alert.alert(
-        'Import Data (Smart Merge)',
+        `${t('importData')} (Smart Merge)`,
         `This will merge new records into your existing data.\nExisting records will NOT be overwritten.\n\nIncoming:\n- ${data.patients.length} patients\n- ${data.appointments.length} appointments\n- ${data.payments.length} payments\n- ${fileCount} files (${attachmentCount} with attachments)`,
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: t('cancel'), style: 'cancel' },
           {
             text: 'Merge',
             onPress: async () => {
               const stats = await mergeData(data);
               Alert.alert(
-                'Import Complete',
+                t('done'),
                 `Added:\n- ${stats.patientsAdded} new patients\n- ${stats.appointmentsAdded} new appointments\n- ${stats.paymentsAdded} new payments\n- ${stats.filesAdded} new files\n\nExisting records were kept unchanged.`
               );
             },
@@ -156,32 +160,37 @@ export default function SettingsScreen() {
         ]
       );
     } catch (error: any) {
-      Alert.alert('Import Failed', error.message || 'An error occurred while importing data.');
+      Alert.alert(t('error'), error.message || 'An error occurred while importing data.');
     }
   };
 
   const clearData = () => {
     Alert.alert(
-      'Clear All Data',
-      'Are you sure you want to delete all data? This cannot be undone.',
+      t('clearAllData'),
+      language === 'ar'
+        ? 'هل أنت متأكد من حذف جميع البيانات؟ لا يمكن التراجع عن هذا.'
+        : 'Are you sure you want to delete all data? This cannot be undone.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Yes, Clear All',
+          text: t('yes'),
           style: 'destructive',
           onPress: () => {
             Alert.alert(
-              'Final Confirmation',
-              'This will permanently delete ALL patients, appointments, payments, and settings. Are you absolutely sure?',
+              language === 'ar' ? 'تأكيد نهائي' : 'Final Confirmation',
+              language === 'ar'
+                ? 'سيتم حذف جميع المرضى والمواعيد والدفعات والإعدادات نهائياً. هل أنت متأكد تماماً؟'
+                : 'This will permanently delete ALL patients, appointments, payments, and settings. Are you absolutely sure?',
               [
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('cancel'), style: 'cancel' },
                 {
-                  text: 'Delete Everything',
+                  text: t('delete'),
                   style: 'destructive',
                   onPress: async () => {
                     await storage.clearAllData();
+                    await clearPasswordHash();
                     await refreshData();
-                    Alert.alert('Done', 'All data has been cleared.');
+                    Alert.alert(t('done'), language === 'ar' ? 'تم مسح جميع البيانات.' : 'All data has been cleared.');
                   },
                 },
               ]
@@ -192,14 +201,64 @@ export default function SettingsScreen() {
     );
   };
 
+  const toggleLanguage = () => {
+    setLanguage(language === 'en' ? 'ar' : 'en');
+  };
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.md }]}>
+      {/* Language Toggle */}
+      <Card style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionHeaderLeft}>
+            <Ionicons name="language" size={22} color={colors.primary} />
+            <Text style={styles.sectionTitle}>{t('language')}</Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          style={styles.languageToggle}
+          onPress={toggleLanguage}
+          activeOpacity={0.7}
+        >
+          <View style={styles.languageOptions}>
+            <View style={[styles.langOption, language === 'en' && styles.langOptionActive]}>
+              <Text style={[styles.langOptionText, language === 'en' && styles.langOptionTextActive]}>
+                English
+              </Text>
+            </View>
+            <View style={[styles.langOption, language === 'ar' && styles.langOptionActive]}>
+              <Text style={[styles.langOptionText, language === 'ar' && styles.langOptionTextActive]}>
+                العربية
+              </Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Card>
+
+      {/* Security */}
+      <Card style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionHeaderLeft}>
+            <Ionicons name="shield-checkmark" size={22} color={colors.primary} />
+            <Text style={styles.sectionTitle}>{t('security')}</Text>
+          </View>
+        </View>
+        <Button
+          title={t('changePassword')}
+          variant="secondary"
+          size="md"
+          onPress={onChangePassword}
+          icon={<Ionicons name="key-outline" size={18} color={colors.primary} />}
+          style={styles.actionBtn}
+        />
+      </Card>
+
       {/* Doctor Profile */}
       <Card style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <View style={styles.sectionHeaderLeft}>
             <Ionicons name="person-circle" size={22} color={colors.primary} />
-            <Text style={styles.sectionTitle}>Doctor Profile</Text>
+            <Text style={styles.sectionTitle}>{t('doctorProfile')}</Text>
           </View>
           {!isEditing && (
             <TouchableOpacity
@@ -212,36 +271,36 @@ export default function SettingsScreen() {
               style={styles.editBtn}
             >
               <Ionicons name="create-outline" size={18} color={colors.primary} />
-              <Text style={styles.editBtnText}>Edit</Text>
+              <Text style={styles.editBtnText}>{t('edit')}</Text>
             </TouchableOpacity>
           )}
         </View>
 
         {isEditing ? (
           <View>
-            <Input label="Name" value={editName} onChangeText={setEditName} placeholder="Dr. Name" />
-            <Input label="Clinic Name" value={editClinic} onChangeText={setEditClinic} placeholder="Clinic name (optional)" />
-            <Input label="Phone" value={editPhone} onChangeText={setEditPhone} placeholder="Phone (optional)" keyboardType="phone-pad" />
+            <Input label={t('name')} value={editName} onChangeText={setEditName} placeholder="Dr. Name" />
+            <Input label={t('clinicName')} value={editClinic} onChangeText={setEditClinic} placeholder={t('clinicNamePlaceholder')} />
+            <Input label={t('phone')} value={editPhone} onChangeText={setEditPhone} placeholder={t('phonePlaceholder')} keyboardType="phone-pad" />
             <View style={styles.editActions}>
-              <Button title="Cancel" variant="ghost" size="sm" onPress={handleCancelEdit} />
-              <Button title="Save" variant="primary" size="sm" onPress={handleSaveProfile} />
+              <Button title={t('cancel')} variant="ghost" size="sm" onPress={handleCancelEdit} />
+              <Button title={t('save')} variant="primary" size="sm" onPress={handleSaveProfile} />
             </View>
           </View>
         ) : (
           <View style={styles.profileInfo}>
             <View style={styles.profileRow}>
               <Ionicons name="person" size={16} color={colors.textMuted} />
-              <Text style={styles.profileLabel}>Name</Text>
+              <Text style={styles.profileLabel}>{t('name')}</Text>
               <Text style={styles.profileValue}>{doctor?.name ?? '-'}</Text>
             </View>
             <View style={styles.profileRow}>
               <Ionicons name="business" size={16} color={colors.textMuted} />
-              <Text style={styles.profileLabel}>Clinic</Text>
+              <Text style={styles.profileLabel}>{t('clinicName')}</Text>
               <Text style={styles.profileValue}>{doctor?.clinicName || '-'}</Text>
             </View>
             <View style={styles.profileRow}>
               <Ionicons name="call" size={16} color={colors.textMuted} />
-              <Text style={styles.profileLabel}>Phone</Text>
+              <Text style={styles.profileLabel}>{t('phone')}</Text>
               <Text style={styles.profileValue}>{doctor?.phone || '-'}</Text>
             </View>
           </View>
@@ -253,13 +312,13 @@ export default function SettingsScreen() {
         <View style={styles.sectionHeader}>
           <View style={styles.sectionHeaderLeft}>
             <Ionicons name="server" size={22} color={colors.primary} />
-            <Text style={styles.sectionTitle}>Data Management</Text>
+            <Text style={styles.sectionTitle}>{t('dataManagement')}</Text>
           </View>
         </View>
 
         <View style={styles.buttonGroup}>
           <Button
-            title="Export as JSON"
+            title={t('exportJson')}
             variant="secondary"
             size="md"
             onPress={exportJSON}
@@ -268,7 +327,7 @@ export default function SettingsScreen() {
             style={styles.actionBtn}
           />
           <Button
-            title="Export as Excel"
+            title={t('exportExcel')}
             variant="secondary"
             size="md"
             onPress={exportExcel}
@@ -277,7 +336,7 @@ export default function SettingsScreen() {
             style={styles.actionBtn}
           />
           <Button
-            title="Import Data"
+            title={t('importData')}
             variant="secondary"
             size="md"
             onPress={importDataFromFile}
@@ -286,7 +345,7 @@ export default function SettingsScreen() {
           />
           <View style={styles.dangerDivider} />
           <Button
-            title="Clear All Data"
+            title={t('clearAllData')}
             variant="danger"
             size="md"
             onPress={clearData}
@@ -301,29 +360,29 @@ export default function SettingsScreen() {
         <View style={styles.sectionHeader}>
           <View style={styles.sectionHeaderLeft}>
             <Ionicons name="information-circle" size={22} color={colors.primary} />
-            <Text style={styles.sectionTitle}>App Info</Text>
+            <Text style={styles.sectionTitle}>{t('appInfo')}</Text>
           </View>
         </View>
 
         <View style={styles.infoGrid}>
           <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Version</Text>
+            <Text style={styles.infoLabel}>{t('version')}</Text>
             <Text style={styles.infoValue}>{APP_VERSION}</Text>
           </View>
           <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Patients</Text>
+            <Text style={styles.infoLabel}>{t('tab_patients')}</Text>
             <Text style={styles.infoValue}>{patients.length}</Text>
           </View>
           <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Appointments</Text>
+            <Text style={styles.infoLabel}>{t('tab_appointments')}</Text>
             <Text style={styles.infoValue}>{appointments.length}</Text>
           </View>
           <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Payments</Text>
+            <Text style={styles.infoLabel}>{t('sectionPayment')}</Text>
             <Text style={styles.infoValue}>{payments.length}</Text>
           </View>
           <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Files</Text>
+            <Text style={styles.infoLabel}>{t('files')}</Text>
             <Text style={styles.infoValue}>{patientFiles.length}</Text>
           </View>
         </View>
@@ -340,8 +399,8 @@ export default function SettingsScreen() {
               <Ionicons name="stats-chart" size={20} color={colors.primary} />
             </View>
             <View>
-              <Text style={styles.reportsTitle}>Financial Reports</Text>
-              <Text style={styles.reportsSubtitle}>View analytics and insights</Text>
+              <Text style={styles.reportsTitle}>{t('financialReports')}</Text>
+              <Text style={styles.reportsSubtitle}>{t('viewAnalytics')}</Text>
             </View>
           </View>
           <Ionicons name="chevron-forward" size={22} color={colors.textMuted} />
@@ -420,6 +479,34 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: spacing.sm,
     marginTop: spacing.xs,
+  },
+  // Language toggle
+  languageToggle: {
+    marginTop: -spacing.xs,
+  },
+  languageOptions: {
+    flexDirection: 'row',
+    backgroundColor: colors.borderLight,
+    borderRadius: borderRadius.full,
+    padding: wp(3),
+  },
+  langOption: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+  },
+  langOptionActive: {
+    backgroundColor: colors.primary,
+    ...shadow.sm,
+  },
+  langOptionText: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  langOptionTextActive: {
+    color: colors.textOnPrimary,
   },
   buttonGroup: {
     gap: spacing.sm,

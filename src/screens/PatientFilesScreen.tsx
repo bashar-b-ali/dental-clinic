@@ -5,6 +5,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useData } from '../context/DataContext';
+import { useLanguage } from '../i18n/LanguageContext';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import EmptyState from '../components/EmptyState';
@@ -14,6 +15,8 @@ import { copyFileToPrivate } from '../utils/storage';
 import { PatientFile } from '../types';
 
 type FilterTab = 'all' | 'images' | 'documents';
+type SortKey = 'dateAdded' | 'appointment';
+type SortDir = 'asc' | 'desc';
 
 interface PendingFile {
   localPath: string;
@@ -38,12 +41,9 @@ function getFileTypeFromMime(mimeType?: string): 'image' | 'pdf' | 'document' {
 
 function getDocIcon(fileType: string): keyof typeof Ionicons.glyphMap {
   switch (fileType) {
-    case 'pdf':
-      return 'document-text';
-    case 'image':
-      return 'image';
-    default:
-      return 'document-outline';
+    case 'pdf': return 'document-text';
+    case 'image': return 'image';
+    default: return 'document-outline';
   }
 }
 
@@ -56,8 +56,11 @@ export default function PatientFilesScreen() {
   };
 
   const { patients, appointments, patientFiles, addPatientFile, updatePatientFile, deletePatientFile } = useData();
+  const { t } = useLanguage();
 
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const [sortKey, setSortKey] = useState<SortKey>('dateAdded');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [fabOpen, setFabOpen] = useState(false);
   const [notesModalVisible, setNotesModalVisible] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
@@ -65,11 +68,17 @@ export default function PatientFilesScreen() {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingFile, setEditingFile] = useState<PatientFile | null>(null);
   const [editNotesText, setEditNotesText] = useState('');
+  const [sortModalVisible, setSortModalVisible] = useState(false);
 
   const patient = useMemo(() => patients.find((p) => p.id === patientId), [patients, patientId]);
   const filteredAppointment = useMemo(
     () => (appointmentId ? appointments.find((a) => a.id === appointmentId) : null),
     [appointments, appointmentId],
+  );
+
+  const appointmentMap = useMemo(
+    () => new Map(appointments.map((a) => [a.id, a])),
+    [appointments],
   );
 
   const files = useMemo(() => {
@@ -82,13 +91,29 @@ export default function PatientFilesScreen() {
     } else if (activeTab === 'documents') {
       result = result.filter((f) => f.fileType !== 'image');
     }
-    return result.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [patientFiles, patientId, appointmentId, activeTab]);
+
+    // Sort
+    result = [...result].sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === 'dateAdded') {
+        cmp = a.createdAt.localeCompare(b.createdAt);
+      } else {
+        // Sort by linked appointment date
+        const aDate = a.appointmentId ? (appointmentMap.get(a.appointmentId)?.date ?? '') : '';
+        const bDate = b.appointmentId ? (appointmentMap.get(b.appointmentId)?.date ?? '') : '';
+        cmp = aDate.localeCompare(bDate);
+        // Secondary sort by createdAt for files with same or no appointment
+        if (cmp === 0) cmp = a.createdAt.localeCompare(b.createdAt);
+      }
+      return sortDir === 'desc' ? -cmp : cmp;
+    });
+
+    return result;
+  }, [patientFiles, patientId, appointmentId, activeTab, sortKey, sortDir, appointmentMap]);
 
   const sections = useMemo((): FileSection[] => {
     if (appointmentId || activeTab !== 'all') return [];
 
-    const appointmentMap = new Map(appointments.map((a) => [a.id, a]));
     const grouped = new Map<string, PatientFile[]>();
     const unlinked: PatientFile[] = [];
 
@@ -106,14 +131,15 @@ export default function PatientFilesScreen() {
     const sortedEntries = [...grouped.entries()].sort(([aId], [bId]) => {
       const aDate = appointmentMap.get(aId)?.date ?? '';
       const bDate = appointmentMap.get(bId)?.date ?? '';
-      return bDate.localeCompare(aDate);
+      const cmp = aDate.localeCompare(bDate);
+      return sortDir === 'desc' ? -cmp : cmp;
     });
 
     for (const [aptId, aptFiles] of sortedEntries) {
       const apt = appointmentMap.get(aptId);
       const procedures = apt?.teethWork.map((tw) => tw.procedure).join(', ') ?? '';
       result.push({
-        title: apt ? formatDate(apt.date) : 'Unknown Appointment',
+        title: apt ? formatDate(apt.date) : t('unknownAppointment'),
         subtitle: procedures || undefined,
         appointmentId: aptId,
         data: aptFiles,
@@ -122,14 +148,14 @@ export default function PatientFilesScreen() {
 
     if (unlinked.length > 0) {
       result.push({
-        title: 'Unlinked Files',
-        subtitle: 'Not linked to any appointment',
+        title: t('unlinkedFiles'),
+        subtitle: t('notLinkedToAppointment'),
         data: unlinked,
       });
     }
 
     return result;
-  }, [files, appointments, appointmentId, activeTab]);
+  }, [files, appointments, appointmentId, activeTab, sortDir, appointmentMap, t]);
 
   // --- Upload flow ---
 
@@ -169,20 +195,16 @@ export default function PatientFilesScreen() {
     setFabOpen(false);
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Permission Required', 'Camera access is needed to take photos.');
+      Alert.alert(t('permissionRequired'), t('cameraPermNeeded'));
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: 'images',
-      quality: 0.8,
-    });
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: 'images', quality: 0.8 });
     if (result.canceled || !result.assets?.length) return;
 
     const asset = result.assets[0];
     const fileName = asset.fileName ?? `photo_${Date.now()}.jpg`;
     const localPath = await copyFileToPrivate(asset.uri, fileName);
     const mimeType = asset.mimeType ?? 'image/jpeg';
-
     showNotesModal([{ localPath, fileName, fileType: getFileTypeFromMime(mimeType), mimeType }]);
   };
 
@@ -190,13 +212,11 @@ export default function PatientFilesScreen() {
     setFabOpen(false);
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Permission Required', 'Gallery access is needed to choose photos.');
+      Alert.alert(t('permissionRequired'), t('galleryPermNeeded'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      allowsMultipleSelection: true,
-      mediaTypes: 'images',
-      quality: 0.8,
+      allowsMultipleSelection: true, mediaTypes: 'images', quality: 0.8,
     });
     if (result.canceled || !result.assets?.length) return;
 
@@ -207,7 +227,6 @@ export default function PatientFilesScreen() {
       const mimeType = asset.mimeType ?? 'image/jpeg';
       pending.push({ localPath, fileName, fileType: getFileTypeFromMime(mimeType), mimeType });
     }
-
     showNotesModal(pending);
   };
 
@@ -220,7 +239,6 @@ export default function PatientFilesScreen() {
     const fileName = asset.name ?? `document_${Date.now()}`;
     const localPath = await copyFileToPrivate(asset.uri, fileName);
     const mimeType = asset.mimeType ?? 'application/octet-stream';
-
     showNotesModal([{ localPath, fileName, fileType: getFileTypeFromMime(mimeType), mimeType }]);
   };
 
@@ -233,7 +251,7 @@ export default function PatientFilesScreen() {
   const handleFileLongPress = (file: PatientFile) => {
     const options: { text: string; onPress: () => void; style?: 'destructive' | 'cancel' }[] = [
       {
-        text: 'Edit Notes',
+        text: t('editNotes'),
         onPress: () => {
           setEditingFile(file);
           setEditNotesText(file.notes ?? '');
@@ -244,38 +262,29 @@ export default function PatientFilesScreen() {
 
     if (file.appointmentId) {
       options.push({
-        text: 'Unlink from Appointment',
+        text: t('unlinkFromAppointment'),
         onPress: () => {
-          Alert.alert('Unlink File', 'Remove this file from the appointment?', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Unlink',
-              onPress: () =>
-                updatePatientFile({ ...file, appointmentId: undefined }),
-            },
+          Alert.alert(t('unlinkFromAppointment'), t('removeFileFromAppointment'), [
+            { text: t('cancel'), style: 'cancel' },
+            { text: t('unlink'), onPress: () => updatePatientFile({ ...file, appointmentId: undefined }) },
           ]);
         },
       });
     }
 
     options.push({
-      text: 'Delete',
+      text: t('delete'),
       style: 'destructive',
       onPress: () => {
-        Alert.alert('Delete File', 'This file will be permanently deleted.', [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => deletePatientFile(file.id),
-          },
+        Alert.alert(t('deleteFile'), t('fileDeletePermanent'), [
+          { text: t('cancel'), style: 'cancel' },
+          { text: t('delete'), style: 'destructive', onPress: () => deletePatientFile(file.id) },
         ]);
       },
     });
 
-    options.push({ text: 'Cancel', onPress: () => {}, style: 'cancel' });
-
-    Alert.alert('File Options', file.fileName, options);
+    options.push({ text: t('cancel'), onPress: () => {}, style: 'cancel' });
+    Alert.alert(t('fileOptions'), file.fileName, options);
   };
 
   const handleSaveEditNotes = async () => {
@@ -289,9 +298,7 @@ export default function PatientFilesScreen() {
   // --- Renderers ---
 
   const renderImageThumbnail = (file: PatientFile, index: number) => {
-    const apt = file.appointmentId
-      ? appointments.find((a) => a.id === file.appointmentId)
-      : null;
+    const apt = file.appointmentId ? appointmentMap.get(file.appointmentId) : null;
 
     return (
       <TouchableOpacity
@@ -317,25 +324,17 @@ export default function PatientFilesScreen() {
           )}
         </View>
         {file.notes ? (
-          <Text style={styles.thumbnailNotes} numberOfLines={1}>
-            {file.notes}
-          </Text>
+          <Text style={styles.thumbnailNotes} numberOfLines={1}>{file.notes}</Text>
         ) : null}
       </TouchableOpacity>
     );
   };
 
   const renderDocumentRow = (file: PatientFile) => {
-    const apt = file.appointmentId
-      ? appointments.find((a) => a.id === file.appointmentId)
-      : null;
+    const apt = file.appointmentId ? appointmentMap.get(file.appointmentId) : null;
 
     return (
-      <Card
-        key={file.id}
-        onPress={() => handleFilePress(file)}
-        style={styles.documentRow}
-      >
+      <Card key={file.id} onPress={() => handleFilePress(file)} style={styles.documentRow}>
         <TouchableOpacity
           style={styles.documentRowInner}
           onLongPress={() => handleFileLongPress(file)}
@@ -345,18 +344,12 @@ export default function PatientFilesScreen() {
             <Ionicons name={getDocIcon(file.fileType)} size={24} color={file.fileType === 'pdf' ? colors.danger : colors.primary} />
           </View>
           <View style={styles.docInfo}>
-            <Text style={styles.docFileName} numberOfLines={1}>
-              {file.fileName}
-            </Text>
+            <Text style={styles.docFileName} numberOfLines={1}>{file.fileName}</Text>
             <Text style={styles.docMeta}>
               {formatDate(file.createdAt)}
-              {apt ? `  •  Apt: ${formatDate(apt.date)}` : ''}
+              {apt ? `  •  ${t('appointment')}: ${formatDate(apt.date)}` : ''}
             </Text>
-            {file.notes ? (
-              <Text style={styles.docNotes} numberOfLines={1}>
-                {file.notes}
-              </Text>
-            ) : null}
+            {file.notes ? <Text style={styles.docNotes} numberOfLines={1}>{file.notes}</Text> : null}
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>
@@ -368,21 +361,26 @@ export default function PatientFilesScreen() {
     <View style={styles.sectionHeader} key={`section-${section.title}`}>
       <View>
         <Text style={styles.sectionTitle}>{section.title}</Text>
-        {section.subtitle ? (
-          <Text style={styles.sectionSubtitle}>{section.subtitle}</Text>
-        ) : null}
+        {section.subtitle ? <Text style={styles.sectionSubtitle}>{section.subtitle}</Text> : null}
       </View>
       <Text style={styles.sectionCount}>
-        {section.data.length} {section.data.length === 1 ? 'file' : 'files'}
+        {section.data.length} {section.data.length === 1 ? t('file') : t('filesPlural')}
       </Text>
     </View>
   );
 
-  const renderFileItem = (file: PatientFile, index: number) => {
-    if (file.fileType === 'image' && activeTab !== 'documents') {
-      return renderImageThumbnail(file, index);
-    }
-    return renderDocumentRow(file);
+  const renderSectionFiles = (sectionFiles: PatientFile[]) => {
+    const images = sectionFiles.filter((f) => f.fileType === 'image');
+    const docs = sectionFiles.filter((f) => f.fileType !== 'image');
+
+    return (
+      <View>
+        {images.length > 0 && (
+          <View style={styles.imageGrid}>{images.map((file, idx) => renderImageThumbnail(file, idx))}</View>
+        )}
+        {docs.map((file) => renderDocumentRow(file))}
+      </View>
+    );
   };
 
   const renderGroupedContent = () => {
@@ -390,13 +388,12 @@ export default function PatientFilesScreen() {
       return (
         <EmptyState
           icon="folder-open-outline"
-          title="No Files Yet"
-          message="Take photos or upload documents to keep track of this patient's records."
+          title={t('noFilesYet')}
+          message={t('takePhotosOrUpload')}
         />
       );
     }
 
-    // If we have sections (grouped view), render with section headers
     if (sections.length > 0) {
       return (
         <FlatList
@@ -413,24 +410,7 @@ export default function PatientFilesScreen() {
       );
     }
 
-    // Flat view (filtered by tab or appointmentId)
     return renderFlatFileList();
-  };
-
-  const renderSectionFiles = (sectionFiles: PatientFile[]) => {
-    const images = sectionFiles.filter((f) => f.fileType === 'image');
-    const docs = sectionFiles.filter((f) => f.fileType !== 'image');
-
-    return (
-      <View>
-        {images.length > 0 && (
-          <View style={styles.imageGrid}>
-            {images.map((file, idx) => renderImageThumbnail(file, idx))}
-          </View>
-        )}
-        {docs.map((file) => renderDocumentRow(file))}
-      </View>
-    );
   };
 
   const renderFlatFileList = () => {
@@ -441,13 +421,11 @@ export default function PatientFilesScreen() {
       return (
         <EmptyState
           icon="folder-open-outline"
-          title="No Files Found"
+          title={t('noFilesFound')}
           message={
-            activeTab === 'images'
-              ? 'No images found. Take a photo or choose from gallery.'
-              : activeTab === 'documents'
-                ? 'No documents found. Upload a PDF or document.'
-                : 'Take photos or upload documents to get started.'
+            activeTab === 'images' ? t('noImagesFound')
+              : activeTab === 'documents' ? t('noDocsFound')
+                : t('takePhotosOrUpload')
           }
         />
       );
@@ -461,9 +439,7 @@ export default function PatientFilesScreen() {
         renderItem={() => (
           <View>
             {activeTab !== 'documents' && images.length > 0 && (
-              <View style={styles.imageGrid}>
-                {images.map((file, idx) => renderImageThumbnail(file, idx))}
-              </View>
+              <View style={styles.imageGrid}>{images.map((file, idx) => renderImageThumbnail(file, idx))}</View>
             )}
             {activeTab !== 'images' && docs.map((file) => renderDocumentRow(file))}
           </View>
@@ -473,10 +449,17 @@ export default function PatientFilesScreen() {
   };
 
   const filterTabs: { key: FilterTab; label: string }[] = [
-    { key: 'all', label: 'All Files' },
-    { key: 'images', label: 'Images' },
-    { key: 'documents', label: 'Documents' },
+    { key: 'all', label: t('allFiles') },
+    { key: 'images', label: t('images') },
+    { key: 'documents', label: t('documents') },
   ];
+
+  const sortOptions: { key: SortKey; label: string }[] = [
+    { key: 'dateAdded', label: t('sortByDateAdded') },
+    { key: 'appointment', label: t('sortByAppointment') },
+  ];
+
+  const fileNoun = files.length === 1 ? t('file') : t('filesPlural');
 
   return (
     <View style={styles.screen}>
@@ -486,10 +469,8 @@ export default function PatientFilesScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
-          <Text style={styles.headerTitle}>{patient?.name ?? 'Patient Files'}</Text>
-          <Text style={styles.headerSubtitle}>
-            {files.length} {files.length === 1 ? 'file' : 'files'}
-          </Text>
+          <Text style={styles.headerTitle}>{patient?.name ?? t('patientFilesTitle')}</Text>
+          <Text style={styles.headerSubtitle}>{files.length} {fileNoun}</Text>
         </View>
       </View>
 
@@ -499,31 +480,39 @@ export default function PatientFilesScreen() {
           <View style={styles.bannerLeft}>
             <Ionicons name="calendar" size={16} color={colors.primary} />
             <Text style={styles.bannerText}>
-              Files for appointment on {formatDate(filteredAppointment.date)}
+              {t('filesForAppointmentOn')} {formatDate(filteredAppointment.date)}
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('PatientFiles', { patientId })}
-          >
-            <Text style={styles.bannerAction}>View All</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('PatientFiles', { patientId })}>
+            <Text style={styles.bannerAction}>{t('viewAll')}</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Filter tabs - only when no appointmentId */}
+      {/* Filter tabs + sort button */}
       {!appointmentId && (
         <View style={styles.tabBar}>
-          {filterTabs.map((tab) => (
-            <TouchableOpacity
-              key={tab.key}
-              style={[styles.tab, activeTab === tab.key && styles.tabActive]}
-              onPress={() => setActiveTab(tab.key)}
-            >
-              <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          <View style={styles.tabRow}>
+            {filterTabs.map((tab) => (
+              <TouchableOpacity
+                key={tab.key}
+                style={[styles.tab, activeTab === tab.key && styles.tabActive]}
+                onPress={() => setActiveTab(tab.key)}
+              >
+                <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TouchableOpacity
+            style={styles.sortButton}
+            onPress={() => setSortModalVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="swap-vertical-outline" size={16} color={colors.primary} />
+            <Text style={styles.sortButtonText}>{t('sortOrder')}</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -532,29 +521,25 @@ export default function PatientFilesScreen() {
 
       {/* FAB */}
       {fabOpen && (
-        <TouchableOpacity
-          style={styles.fabOverlay}
-          activeOpacity={1}
-          onPress={() => setFabOpen(false)}
-        >
+        <TouchableOpacity style={styles.fabOverlay} activeOpacity={1} onPress={() => setFabOpen(false)}>
           <View style={styles.fabMenu}>
             <TouchableOpacity style={styles.fabMenuItem} onPress={handleTakePhoto}>
               <View style={[styles.fabMenuIcon, { backgroundColor: colors.primaryBg }]}>
                 <Ionicons name="camera" size={22} color={colors.primary} />
               </View>
-              <Text style={styles.fabMenuLabel}>Take Photo</Text>
+              <Text style={styles.fabMenuLabel}>{t('takePhoto')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.fabMenuItem} onPress={handlePickFromGallery}>
               <View style={[styles.fabMenuIcon, { backgroundColor: colors.successBg }]}>
                 <Ionicons name="images" size={22} color={colors.success} />
               </View>
-              <Text style={styles.fabMenuLabel}>Choose from Gallery</Text>
+              <Text style={styles.fabMenuLabel}>{t('chooseFromGallery')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.fabMenuItem} onPress={handlePickDocument}>
               <View style={[styles.fabMenuIcon, { backgroundColor: colors.warningBg }]}>
                 <Ionicons name="document-attach" size={22} color={colors.warning} />
               </View>
-              <Text style={styles.fabMenuLabel}>Upload Document</Text>
+              <Text style={styles.fabMenuLabel}>{t('uploadDocument')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -568,17 +553,69 @@ export default function PatientFilesScreen() {
         <Ionicons name={fabOpen ? 'close' : 'add'} size={28} color={colors.textOnPrimary} />
       </TouchableOpacity>
 
+      {/* Sort Modal */}
+      <Modal visible={sortModalVisible} transparent animationType="fade">
+        <TouchableOpacity style={styles.sortModalOverlay} activeOpacity={1} onPress={() => setSortModalVisible(false)}>
+          <View style={styles.sortModalContent}>
+            <Text style={styles.sortModalTitle}>{t('sortOrder')}</Text>
+
+            {sortOptions.map((opt) => (
+              <TouchableOpacity
+                key={opt.key}
+                style={[styles.sortOption, sortKey === opt.key && styles.sortOptionActive]}
+                onPress={() => { setSortKey(opt.key); }}
+              >
+                <Text style={[styles.sortOptionText, sortKey === opt.key && styles.sortOptionTextActive]}>
+                  {opt.label}
+                </Text>
+                {sortKey === opt.key && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+              </TouchableOpacity>
+            ))}
+
+            <View style={styles.sortDivider} />
+
+            <TouchableOpacity
+              style={[styles.sortOption, sortDir === 'desc' && styles.sortOptionActive]}
+              onPress={() => setSortDir('desc')}
+            >
+              <View style={styles.sortDirRow}>
+                <Ionicons name="arrow-down" size={16} color={sortDir === 'desc' ? colors.primary : colors.textSecondary} />
+                <Text style={[styles.sortOptionText, sortDir === 'desc' && styles.sortOptionTextActive]}>
+                  {t('sortDesc')}
+                </Text>
+              </View>
+              {sortDir === 'desc' && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.sortOption, sortDir === 'asc' && styles.sortOptionActive]}
+              onPress={() => setSortDir('asc')}
+            >
+              <View style={styles.sortDirRow}>
+                <Ionicons name="arrow-up" size={16} color={sortDir === 'asc' ? colors.primary : colors.textSecondary} />
+                <Text style={[styles.sortOptionText, sortDir === 'asc' && styles.sortOptionTextActive]}>
+                  {t('sortAsc')}
+                </Text>
+              </View>
+              {sortDir === 'asc' && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+            </TouchableOpacity>
+
+            <Button title={t('done')} variant="primary" onPress={() => setSortModalVisible(false)} style={{ marginTop: spacing.md }} />
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Notes Modal (after upload) */}
       <Modal visible={notesModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Notes</Text>
+            <Text style={styles.modalTitle}>{t('addNotes')}</Text>
             <Text style={styles.modalSubtitle}>
-              Optionally describe {pendingFiles.length > 1 ? 'these files' : 'this file'} (e.g., "Before treatment", "X-ray left molar")
+              {pendingFiles.length > 1 ? t('optionallyDescribeMulti') : t('optionallyDescribe')}
             </Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="Enter notes..."
+              placeholder={t('enterNotes')}
               placeholderTextColor={colors.textMuted}
               value={notesText}
               onChangeText={setNotesText}
@@ -586,8 +623,8 @@ export default function PatientFilesScreen() {
               autoFocus
             />
             <View style={styles.modalButtons}>
-              <Button title="Skip" variant="ghost" onPress={handleSkipNotes} style={{ flex: 1 }} />
-              <Button title="Save" variant="primary" onPress={handleSaveNotes} style={{ flex: 1 }} />
+              <Button title={t('skip')} variant="ghost" onPress={handleSkipNotes} style={{ flex: 1 }} />
+              <Button title={t('save')} variant="primary" onPress={handleSaveNotes} style={{ flex: 1 }} />
             </View>
           </View>
         </View>
@@ -597,10 +634,10 @@ export default function PatientFilesScreen() {
       <Modal visible={editModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit Notes</Text>
+            <Text style={styles.modalTitle}>{t('editNotes')}</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="Enter notes..."
+              placeholder={t('enterNotes')}
               placeholderTextColor={colors.textMuted}
               value={editNotesText}
               onChangeText={setEditNotesText}
@@ -608,16 +645,8 @@ export default function PatientFilesScreen() {
               autoFocus
             />
             <View style={styles.modalButtons}>
-              <Button
-                title="Cancel"
-                variant="ghost"
-                onPress={() => {
-                  setEditModalVisible(false);
-                  setEditingFile(null);
-                }}
-                style={{ flex: 1 }}
-              />
-              <Button title="Save" variant="primary" onPress={handleSaveEditNotes} style={{ flex: 1 }} />
+              <Button title={t('cancel')} variant="ghost" onPress={() => { setEditModalVisible(false); setEditingFile(null); }} style={{ flex: 1 }} />
+              <Button title={t('save')} variant="primary" onPress={handleSaveEditNotes} style={{ flex: 1 }} />
             </View>
           </View>
         </View>
@@ -629,333 +658,150 @@ export default function PatientFilesScreen() {
 const THUMBNAIL_GAP = spacing.sm;
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
+  screen: { flex: 1, backgroundColor: colors.bg },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xl + spacing.md,
-    paddingBottom: spacing.md,
-    backgroundColor: colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md,
+    paddingTop: spacing.xl + spacing.md, paddingBottom: spacing.md,
+    backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  backButton: {
-    marginRight: spacing.sm,
-    padding: spacing.xs,
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  headerSubtitle: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
+  backButton: { marginRight: spacing.sm, padding: spacing.xs },
+  headerInfo: { flex: 1 },
+  headerTitle: { fontSize: fontSize.xl, fontWeight: '700', color: colors.text },
+  headerSubtitle: { fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 2 },
 
-  // Appointment banner
   appointmentBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.primaryBg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: colors.primaryBg, paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2, borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  bannerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flex: 1,
-  },
-  bannerText: {
-    fontSize: fontSize.sm,
-    color: colors.primaryDark,
-    fontWeight: '500',
-    flex: 1,
-  },
-  bannerAction: {
-    fontSize: fontSize.sm,
-    color: colors.primary,
-    fontWeight: '700',
-  },
+  bannerLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
+  bannerText: { fontSize: fontSize.sm, color: colors.primaryDark, fontWeight: '500', flex: 1 },
+  bannerAction: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '700' },
 
-  // Filter tabs
   tabBar: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xs,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xs,
     backgroundColor: colors.card,
-    gap: spacing.sm,
   },
+  tabRow: { flexDirection: 'row', gap: spacing.sm },
   tab: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.borderLight,
+    paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.full, backgroundColor: colors.borderLight,
   },
-  tabActive: {
-    backgroundColor: colors.primary,
+  tabActive: { backgroundColor: colors.primary },
+  tabText: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: '600' },
+  tabTextActive: { color: colors.textOnPrimary },
+  sortButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingVertical: spacing.xs, paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.card,
   },
-  tabText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  tabTextActive: {
-    color: colors.textOnPrimary,
-  },
+  sortButtonText: { fontSize: fontSize.xs, fontWeight: '600', color: colors.primary },
 
-  // Content
-  content: {
-    flex: 1,
-  },
-  listContent: {
-    padding: spacing.md,
-    paddingBottom: 100,
-  },
+  content: { flex: 1 },
+  listContent: { padding: spacing.md, paddingBottom: 100 },
 
-  // Section headers
   sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginBottom: spacing.sm,
-    marginTop: spacing.md,
-    paddingBottom: spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end',
+    marginBottom: spacing.sm, marginTop: spacing.md, paddingBottom: spacing.xs,
+    borderBottomWidth: 1, borderBottomColor: colors.borderLight,
   },
-  sectionTitle: {
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  sectionSubtitle: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  sectionCount: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    fontWeight: '500',
-  },
+  sectionTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.text },
+  sectionSubtitle: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 2 },
+  sectionCount: { fontSize: fontSize.xs, color: colors.textMuted, fontWeight: '500' },
 
-  // Image grid
   imageGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -THUMBNAIL_GAP / 2,
-    marginBottom: spacing.sm,
+    flexDirection: 'row', flexWrap: 'wrap',
+    marginHorizontal: -THUMBNAIL_GAP / 2, marginBottom: spacing.sm,
   },
-  thumbnailContainer: {
-    width: '50%',
-    paddingHorizontal: THUMBNAIL_GAP / 2,
-    marginBottom: THUMBNAIL_GAP,
-  },
+  thumbnailContainer: { width: '50%', paddingHorizontal: THUMBNAIL_GAP / 2, marginBottom: THUMBNAIL_GAP },
   thumbnailWrapper: {
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-    backgroundColor: colors.border,
-    aspectRatio: 1,
-    ...shadow.sm,
+    borderRadius: borderRadius.md, overflow: 'hidden',
+    backgroundColor: colors.border, aspectRatio: 1, ...shadow.sm,
   },
-  thumbnailImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
+  thumbnailImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   thumbnailOverlay: {
-    position: 'absolute',
-    top: spacing.xs,
-    right: spacing.xs,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    borderRadius: borderRadius.full,
-    padding: 4,
+    position: 'absolute', top: spacing.xs, right: spacing.xs,
+    backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: borderRadius.full, padding: 4,
   },
   thumbnailDateLabel: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: spacing.sm, paddingVertical: 3,
   },
-  thumbnailDateText: {
-    fontSize: fontSize.xs,
-    color: '#FFFFFF',
-    fontWeight: '500',
-  },
+  thumbnailDateText: { fontSize: fontSize.xs, color: '#FFFFFF', fontWeight: '500' },
   appointmentChip: {
-    position: 'absolute',
-    top: spacing.xs,
-    left: spacing.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
+    position: 'absolute', top: spacing.xs, left: spacing.xs,
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: borderRadius.sm,
+    paddingHorizontal: 5, paddingVertical: 2,
   },
-  appointmentChipText: {
-    fontSize: 9,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  thumbnailNotes: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginTop: 4,
-    paddingHorizontal: 2,
-  },
+  appointmentChipText: { fontSize: 9, color: colors.primary, fontWeight: '600' },
+  thumbnailNotes: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, paddingHorizontal: 2 },
 
-  // Document rows
-  documentRow: {
-    marginBottom: spacing.sm,
-    padding: 0,
-  },
-  documentRowInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
-  docIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  docIconPdf: {
-    backgroundColor: colors.dangerBg,
-  },
-  docIconGeneric: {
-    backgroundColor: colors.primaryBg,
-  },
-  docInfo: {
-    flex: 1,
-  },
-  docFileName: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  docMeta: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  docNotes: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginTop: 2,
-    fontStyle: 'italic',
-  },
+  documentRow: { marginBottom: spacing.sm, padding: 0 },
+  documentRowInner: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, gap: spacing.sm },
+  docIconContainer: { width: 44, height: 44, borderRadius: borderRadius.sm, alignItems: 'center', justifyContent: 'center' },
+  docIconPdf: { backgroundColor: colors.dangerBg },
+  docIconGeneric: { backgroundColor: colors.primaryBg },
+  docInfo: { flex: 1 },
+  docFileName: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text },
+  docMeta: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
+  docNotes: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 2, fontStyle: 'italic' },
 
-  // FAB
   fabOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-    alignItems: 'flex-end',
-    zIndex: 10,
+    ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end', alignItems: 'flex-end', zIndex: 10,
   },
   fabMenu: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginRight: spacing.md,
-    marginBottom: 80,
-    minWidth: 220,
-    ...shadow.lg,
+    backgroundColor: colors.card, borderRadius: borderRadius.lg,
+    padding: spacing.md, marginRight: spacing.md, marginBottom: 80,
+    minWidth: 220, ...shadow.lg,
   },
-  fabMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm + 2,
-    gap: spacing.sm,
-  },
-  fabMenuIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fabMenuLabel: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    fontWeight: '500',
-  },
+  fabMenuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm + 2, gap: spacing.sm },
+  fabMenuIcon: { width: 40, height: 40, borderRadius: borderRadius.full, alignItems: 'center', justifyContent: 'center' },
+  fabMenuLabel: { fontSize: fontSize.md, color: colors.text, fontWeight: '500' },
   fab: {
-    position: 'absolute',
-    bottom: spacing.lg,
-    right: spacing.md,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 20,
-    ...shadow.lg,
+    position: 'absolute', bottom: spacing.lg, right: spacing.md,
+    width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primary,
+    alignItems: 'center', justifyContent: 'center', zIndex: 20, ...shadow.lg,
   },
-  fabActive: {
-    backgroundColor: colors.primaryDark,
+  fabActive: { backgroundColor: colors.primaryDark },
+
+  // Sort modal
+  sortModalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center', alignItems: 'center', padding: spacing.xl,
   },
+  sortModalContent: {
+    backgroundColor: colors.card, borderRadius: borderRadius.xl,
+    padding: spacing.lg, width: '100%', maxWidth: 340,
+  },
+  sortModalTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text, marginBottom: spacing.md },
+  sortOption: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md, marginBottom: spacing.xs,
+  },
+  sortOptionActive: { backgroundColor: colors.primaryBg },
+  sortOptionText: { fontSize: fontSize.md, color: colors.text },
+  sortOptionTextActive: { fontWeight: '700', color: colors.primary },
+  sortDirRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  sortDivider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.sm },
 
   // Modals
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    padding: spacing.lg,
+    backgroundColor: colors.card, borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl, padding: spacing.lg,
     paddingBottom: spacing.xl + spacing.md,
   },
-  modalTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  modalSubtitle: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
-  },
+  modalTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text, marginBottom: spacing.xs },
+  modalSubtitle: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.md },
   modalInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.text,
-    minHeight: 80,
-    textAlignVertical: 'top',
-    marginBottom: spacing.md,
+    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md,
+    padding: spacing.md, fontSize: fontSize.md, color: colors.text,
+    minHeight: 80, textAlignVertical: 'top', marginBottom: spacing.md,
   },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
+  modalButtons: { flexDirection: 'row', gap: spacing.sm },
 });

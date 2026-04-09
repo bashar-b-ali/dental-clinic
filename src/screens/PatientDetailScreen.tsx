@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, Image } fr
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useData } from '../context/DataContext';
+import { useLanguage } from '../i18n/LanguageContext';
 import Card from '../components/Card';
 import StatusBadge from '../components/StatusBadge';
 import Button from '../components/Button';
@@ -15,6 +16,7 @@ export default function PatientDetailScreen() {
   const route = useRoute<any>();
   const { patientId } = route.params;
   const { patients, appointments, payments, patientFiles, deletePatient } = useData();
+  const { t } = useLanguage();
 
   const patient = useMemo(
     () => patients.find((p) => p.id === patientId),
@@ -43,13 +45,13 @@ export default function PatientDetailScreen() {
 
     const hasAppointments = patientAppointments.length > 0;
     const message = hasAppointments
-      ? `This patient has ${patientAppointments.length} appointment(s). Deleting will remove the patient record but keep the appointment history. Are you sure?`
-      : `Are you sure you want to delete ${patient.name}? This action cannot be undone.`;
+      ? t('deletePatientWithAppts')
+      : t('deletePatientMsg');
 
-    Alert.alert('Delete Patient', message, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('deletePatientTitle'), message, [
+      { text: t('cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('delete'),
         style: 'destructive',
         onPress: async () => {
           await deletePatient(patientId);
@@ -63,16 +65,16 @@ export default function PatientDetailScreen() {
     return (
       <View style={styles.centered}>
         <Ionicons name="alert-circle-outline" size={48} color={colors.textMuted} />
-        <Text style={styles.notFoundText}>Patient not found</Text>
+        <Text style={styles.notFoundText}>{t('patientNotFound')}</Text>
       </View>
     );
   }
 
   const infoItems = [
-    { icon: 'call-outline' as const, label: 'Phone', value: patient.phone },
-    { icon: 'mail-outline' as const, label: 'Email', value: patient.email },
-    { icon: 'person-outline' as const, label: 'Age', value: patient.age ? `${patient.age} years` : undefined },
-    { icon: 'male-female-outline' as const, label: 'Gender', value: patient.gender ? patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1) : undefined },
+    { icon: 'call-outline' as const, label: t('phone'), value: patient.phone },
+    { icon: 'mail-outline' as const, label: t('email'), value: patient.email },
+    { icon: 'person-outline' as const, label: t('age'), value: patient.age ? `${patient.age} years` : undefined },
+    { icon: 'male-female-outline' as const, label: t('gender'), value: patient.gender ? patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1) : undefined },
   ].filter((item) => item.value);
 
   return (
@@ -91,7 +93,7 @@ export default function PatientDetailScreen() {
           </View>
           <Text style={styles.patientName}>{patient.name}</Text>
           <Text style={styles.memberSince}>
-            Patient since {formatDate(patient.createdAt)}
+            {t('added')} {formatDate(patient.createdAt)}
           </Text>
           <View style={styles.headerActions}>
             <TouchableOpacity
@@ -100,7 +102,7 @@ export default function PatientDetailScreen() {
               activeOpacity={0.7}
             >
               <Ionicons name="create-outline" size={18} color={colors.primary} />
-              <Text style={styles.headerButtonText}>Edit</Text>
+              <Text style={styles.headerButtonText}>{t('edit')}</Text>
             </TouchableOpacity>
             <View style={styles.headerDivider} />
             <TouchableOpacity
@@ -109,7 +111,7 @@ export default function PatientDetailScreen() {
               activeOpacity={0.7}
             >
               <Ionicons name="trash-outline" size={18} color={colors.danger} />
-              <Text style={[styles.headerButtonText, { color: colors.danger }]}>Delete</Text>
+              <Text style={[styles.headerButtonText, { color: colors.danger }]}>{t('delete')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -117,7 +119,7 @@ export default function PatientDetailScreen() {
         {/* Patient Info */}
         {(infoItems.length > 0 || patient.medicalNotes) && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Patient Information</Text>
+            <Text style={styles.sectionTitle}>{t('patientInformation')}</Text>
             <Card>
               {infoItems.map((item, index) => (
                 <View
@@ -139,7 +141,7 @@ export default function PatientDetailScreen() {
                   <View style={styles.notesSection}>
                     <View style={styles.infoLabel}>
                       <Ionicons name="document-text-outline" size={18} color={colors.textMuted} />
-                      <Text style={styles.infoLabelText}>Medical Notes</Text>
+                      <Text style={styles.infoLabelText}>{t('medicalNotes')}</Text>
                     </View>
                     <Text style={styles.notesText}>{patient.medicalNotes}</Text>
                   </View>
@@ -151,17 +153,17 @@ export default function PatientDetailScreen() {
 
         {/* Financial Summary */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Financial Summary</Text>
+          <Text style={styles.sectionTitle}>{t('financialSummary')}</Text>
           <Card>
             <View style={styles.financeGrid}>
               <View style={styles.financeItem}>
-                <Text style={styles.financeLabel}>Total Charged</Text>
+                <Text style={styles.financeLabel}>{t('totalCharged')}</Text>
                 <Text style={styles.financeValue}>
                   {formatCurrency(financials.totalCharged)}
                 </Text>
               </View>
               <View style={styles.financeItem}>
-                <Text style={styles.financeLabel}>Total Paid</Text>
+                <Text style={styles.financeLabel}>{t('totalPaid')}</Text>
                 <Text style={[styles.financeValue, { color: colors.success }]}>
                   {formatCurrency(financials.totalPaid)}
                 </Text>
@@ -169,7 +171,7 @@ export default function PatientDetailScreen() {
             </View>
             <View style={styles.balanceDivider} />
             <View style={styles.balanceRow}>
-              <Text style={styles.balanceLabel}>Remaining Balance</Text>
+              <Text style={styles.balanceLabel}>{t('remainingBalance')}</Text>
               <Text
                 style={[
                   styles.balanceValue,
@@ -184,7 +186,7 @@ export default function PatientDetailScreen() {
             </View>
             <View style={styles.paymentButtonWrapper}>
               <Button
-                title="Record Payment"
+                title={t('recordPayment')}
                 variant="secondary"
                 size="sm"
                 icon={<Ionicons name="card-outline" size={16} color={colors.primary} />}
@@ -197,9 +199,9 @@ export default function PatientDetailScreen() {
         {/* Files & Images */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Files & Images</Text>
+            <Text style={styles.sectionTitle}>{t('filesAndImages')}</Text>
             <Text style={styles.appointmentCount}>
-              {patientFiles.filter((f) => f.patientId === patientId).length} files
+              {patientFiles.filter((f) => f.patientId === patientId).length} {t('filesPlural')}
             </Text>
           </View>
           {(() => {
@@ -230,18 +232,18 @@ export default function PatientDetailScreen() {
                 ) : (
                   <View style={styles.emptyAppointments}>
                     <Ionicons name="images-outline" size={32} color={colors.textMuted} />
-                    <Text style={styles.emptyText}>No files yet</Text>
+                    <Text style={styles.emptyText}>{t('noFilesYetSmall')}</Text>
                   </View>
                 )}
                 <View style={styles.viewAllRow}>
-                  <Text style={styles.viewAllText}>View all files</Text>
+                  <Text style={styles.viewAllText}>{t('viewAllFiles')}</Text>
                   <Ionicons name="chevron-forward" size={16} color={colors.primary} />
                 </View>
               </Card>
             );
           })()}
           <Button
-            title="Upload Files"
+            title={t('uploadFiles')}
             variant="secondary"
             size="sm"
             icon={<Ionicons name="cloud-upload-outline" size={16} color={colors.primary} />}
@@ -253,9 +255,9 @@ export default function PatientDetailScreen() {
         {/* Appointments */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Appointment History</Text>
+            <Text style={styles.sectionTitle}>{t('appointmentHistory')}</Text>
             <Text style={styles.appointmentCount}>
-              {patientAppointments.length} {patientAppointments.length === 1 ? 'visit' : 'visits'}
+              {patientAppointments.length} {patientAppointments.length === 1 ? t('visit') : t('visits')}
             </Text>
           </View>
 
@@ -263,7 +265,7 @@ export default function PatientDetailScreen() {
             <Card>
               <View style={styles.emptyAppointments}>
                 <Ionicons name="calendar-outline" size={36} color={colors.textMuted} />
-                <Text style={styles.emptyText}>No appointments yet</Text>
+                <Text style={styles.emptyText}>{t('noAppointmentsYet')}</Text>
               </View>
             </Card>
           ) : (
@@ -318,7 +320,7 @@ export default function PatientDetailScreen() {
 
           <View style={styles.newAppointmentButton}>
             <Button
-              title="New Appointment"
+              title={t('newAppointment')}
               onPress={() => navigation.navigate('AddAppointment', { patientId })}
               icon={<Ionicons name="add-circle-outline" size={20} color={colors.textOnPrimary} />}
             />

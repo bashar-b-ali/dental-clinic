@@ -7,17 +7,13 @@ import Button from '../components/Button';
 import { colors, spacing, fontSize, borderRadius } from '../utils/theme';
 import { wp } from '../utils/responsive';
 import { Patient } from '../types';
-
-const GENDER_OPTIONS: { label: string; value: Patient['gender'] }[] = [
-  { label: 'Male', value: 'male' },
-  { label: 'Female', value: 'female' },
-  { label: 'Other', value: 'other' },
-];
+import { useLanguage } from '../i18n/LanguageContext';
 
 export default function AddPatientScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { addPatient, updatePatient } = useData();
+  const { t } = useLanguage();
 
   const existingPatient: Patient | undefined = route.params?.patient;
   const isEditing = !!existingPatient;
@@ -45,7 +41,7 @@ export default function AddPatientScreen() {
   const handleSave = async () => {
     const trimmedName = name.trim();
     if (!trimmedName) {
-      setNameError('Patient name is required');
+      setNameError(t('patientNameRequired'));
       return;
     }
     setNameError('');
@@ -76,7 +72,7 @@ export default function AddPatientScreen() {
       }
       navigation.goBack();
     } catch {
-      Alert.alert('Error', 'Failed to save patient. Please try again.');
+      Alert.alert(t('error'), t('failedToSavePatient'));
     } finally {
       setSaving(false);
     }
@@ -92,11 +88,11 @@ export default function AddPatientScreen() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.header}>{isEditing ? 'Edit Patient' : 'New Patient'}</Text>
+        <Text style={styles.header}>{isEditing ? t('editPatient') : t('newPatient')}</Text>
 
         <Input
-          label="Name *"
-          placeholder="Full name"
+          label={t('name') + ' *'}
+          placeholder={t('fullName')}
           value={name}
           onChangeText={(v) => {
             setName(v);
@@ -107,16 +103,16 @@ export default function AddPatientScreen() {
         />
 
         <Input
-          label="Phone"
-          placeholder="Phone number"
+          label={t('phone')}
+          placeholder={t('phoneNumber')}
           value={phone}
           onChangeText={setPhone}
           keyboardType="phone-pad"
         />
 
         <Input
-          label="Email"
-          placeholder="Email address"
+          label={t('email')}
+          placeholder={t('emailAddress')}
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
@@ -124,8 +120,8 @@ export default function AddPatientScreen() {
         />
 
         <Input
-          label="Age"
-          placeholder="Age"
+          label={t('age')}
+          placeholder={t('age')}
           value={age}
           onChangeText={setAge}
           keyboardType="numeric"
@@ -133,9 +129,13 @@ export default function AddPatientScreen() {
 
         {/* Gender selector */}
         <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Gender</Text>
+          <Text style={styles.label}>{t('gender')}</Text>
           <View style={styles.genderRow}>
-            {GENDER_OPTIONS.map((opt) => {
+            {([
+              { label: t('male'), value: 'male' as Patient['gender'] },
+              { label: t('female'), value: 'female' as Patient['gender'] },
+              { label: t('other'), value: 'other' as Patient['gender'] },
+            ]).map((opt) => {
               const selected = gender === opt.value;
               return (
                 <TouchableOpacity
@@ -154,8 +154,8 @@ export default function AddPatientScreen() {
         </View>
 
         <Input
-          label="Medical Notes"
-          placeholder="Allergies, conditions, medications..."
+          label={t('medicalNotes')}
+          placeholder={t('medicalNotesPlaceholder')}
           value={medicalNotes}
           onChangeText={setMedicalNotes}
           multiline
@@ -166,14 +166,14 @@ export default function AddPatientScreen() {
 
         <View style={styles.actions}>
           <Button
-            title={isEditing ? 'Save Changes' : 'Add Patient'}
+            title={isEditing ? t('saveChanges') : t('addPatient')}
             onPress={handleSave}
             loading={saving}
             size="lg"
             style={styles.saveButton}
           />
           <Button
-            title="Cancel"
+            title={t('cancel')}
             onPress={() => navigation.goBack()}
             variant="ghost"
             size="lg"

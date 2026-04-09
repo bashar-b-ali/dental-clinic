@@ -2,7 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useData } from '../context/DataContext';
+import { useLanguage } from '../i18n/LanguageContext';
 import Card from '../components/Card';
 import Input from '../components/Input';
 import EmptyState from '../components/EmptyState';
@@ -17,6 +19,8 @@ type SortType = 'name' | 'balance';
 export default function BillingScreen() {
   const navigation = useNavigation<any>();
   const { patients, appointments, payments } = useData();
+  const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
   const [sortBy, setSortBy] = useState<SortType>('name');
@@ -44,7 +48,6 @@ export default function BillingScreen() {
 
     let result = patientBillingData;
 
-    // Apply search
     if (query) {
       result = result.filter(
         (item) =>
@@ -53,14 +56,12 @@ export default function BillingScreen() {
       );
     }
 
-    // Apply filter
     if (filter === 'withBalance') {
       result = result.filter((item) => item.balance > 0);
     } else if (filter === 'paidUp') {
       result = result.filter((item) => item.balance <= 0);
     }
 
-    // Apply sort
     if (sortBy === 'name') {
       result = [...result].sort((a, b) =>
         a.patient.name.localeCompare(b.patient.name)
@@ -73,9 +74,9 @@ export default function BillingScreen() {
   }, [patientBillingData, search, filter, sortBy]);
 
   const filters: { key: FilterType; label: string }[] = [
-    { key: 'all', label: 'All' },
-    { key: 'withBalance', label: 'With Balance' },
-    { key: 'paidUp', label: 'Paid Up' },
+    { key: 'all', label: t('filterAll') },
+    { key: 'withBalance', label: t('withBalance') },
+    { key: 'paidUp', label: t('paidUpFilter') },
   ];
 
   const renderPatientCard = ({
@@ -110,10 +111,10 @@ export default function BillingScreen() {
             ) : null}
             <View style={styles.chargesRow}>
               <Text style={styles.chargeText}>
-                Charged: {formatCurrency(item.totalCharged)}
+                {t('charged')}: {formatCurrency(item.totalCharged)}
               </Text>
               <Text style={styles.paidText}>
-                Paid: {formatCurrency(item.totalPaid)}
+                {t('paid')}: {formatCurrency(item.totalPaid)}
               </Text>
             </View>
           </View>
@@ -121,11 +122,11 @@ export default function BillingScreen() {
             {isPaidUp && item.totalCharged > 0 ? (
               <View style={styles.paidUpBadge}>
                 <Ionicons name="checkmark-circle" size={ms(20)} color={colors.success} />
-                <Text style={styles.paidUpText}>Paid</Text>
+                <Text style={styles.paidUpText}>{t('paid')}</Text>
               </View>
             ) : (
               <>
-                <Text style={styles.balanceLabel}>Balance</Text>
+                <Text style={styles.balanceLabel}>{t('balance')}</Text>
                 <Text
                   style={[
                     styles.balanceAmount,
@@ -142,31 +143,33 @@ export default function BillingScreen() {
     );
   };
 
+  const patientNoun = patients.length === 1 ? t('patient') : t('patients');
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Billing</Text>
+        <Text style={styles.title}>{t('billingTitle')}</Text>
         <Text style={styles.subtitle}>
-          {patients.length} {patients.length === 1 ? 'patient' : 'patients'}
+          {patients.length} {patientNoun}
         </Text>
       </View>
 
       {/* Summary Stats */}
       <View style={styles.statsRow}>
         <View style={[styles.statBox, { backgroundColor: colors.primaryBg }]}>
-          <Text style={[styles.statLabel, { color: colors.primaryDark }]}>Revenue</Text>
+          <Text style={[styles.statLabel, { color: colors.primaryDark }]}>{t('revenue')}</Text>
           <Text style={[styles.statValue, { color: colors.primary }]}>
             {formatCurrency(totals.totalCharged)}
           </Text>
         </View>
         <View style={[styles.statBox, { backgroundColor: colors.successBg }]}>
-          <Text style={[styles.statLabel, { color: colors.success }]}>Collected</Text>
+          <Text style={[styles.statLabel, { color: colors.success }]}>{t('collected')}</Text>
           <Text style={[styles.statValue, { color: colors.success }]}>
             {formatCurrency(totals.totalPaid)}
           </Text>
         </View>
         <View style={[styles.statBox, { backgroundColor: colors.dangerBg }]}>
-          <Text style={[styles.statLabel, { color: colors.danger }]}>Outstanding</Text>
+          <Text style={[styles.statLabel, { color: colors.danger }]}>{t('outstanding')}</Text>
           <Text style={[styles.statValue, { color: colors.danger }]}>
             {formatCurrency(totals.totalOutstanding)}
           </Text>
@@ -198,7 +201,7 @@ export default function BillingScreen() {
         >
           <Ionicons name="swap-vertical-outline" size={ms(16)} color={colors.primary} />
           <Text style={styles.sortButtonText}>
-            {sortBy === 'name' ? 'Name' : 'Balance'}
+            {sortBy === 'name' ? t('sortName') : t('sortBalance')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -213,7 +216,7 @@ export default function BillingScreen() {
             style={styles.searchIcon}
           />
           <Input
-            placeholder="Search by name or phone..."
+            placeholder={t('searchByNameOrPhone')}
             value={search}
             onChangeText={setSearch}
             style={styles.searchInput}
@@ -228,25 +231,25 @@ export default function BillingScreen() {
         search.length > 0 ? (
           <EmptyState
             icon="search-outline"
-            title="No Results"
-            message={`No patients found matching "${search}"`}
+            title={t('noResults')}
+            message={`${t('noPatientFound')} "${search}"`}
           />
         ) : filter !== 'all' ? (
           <EmptyState
             icon="funnel-outline"
-            title="No Patients"
+            title={t('noPatientsTitle')}
             message={
               filter === 'withBalance'
-                ? 'No patients have an outstanding balance'
-                : 'No patients are fully paid up yet'
+                ? t('noOutstandingBalance')
+                : t('noPaidUpYet')
             }
           />
         ) : (
           <EmptyState
             icon="cash-outline"
-            title="No Billing Data"
-            message="Add patients and appointments to see billing information"
-            actionLabel="Add Patient"
+            title={t('noBillingData')}
+            message={t('addPatientsForBilling')}
+            actionLabel={t('addPatient')}
             onAction={() => navigation.navigate('AddPatient', {})}
           />
         )

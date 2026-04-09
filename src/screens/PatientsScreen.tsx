@@ -2,7 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useData } from '../context/DataContext';
+import { useLanguage } from '../i18n/LanguageContext';
 import Card from '../components/Card';
 import Input from '../components/Input';
 import EmptyState from '../components/EmptyState';
@@ -14,6 +16,8 @@ import { Patient } from '../types';
 export default function PatientsScreen() {
   const navigation = useNavigation<any>();
   const { patients, appointments, payments } = useData();
+  const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
 
   const filteredPatients = useMemo(() => {
@@ -64,12 +68,12 @@ export default function PatientsScreen() {
             <View style={styles.inlineRow}>
               <Ionicons name="calendar-outline" size={ms(13)} color={colors.textMuted} />
               <Text style={styles.dateText}>
-                Added {formatDate(item.createdAt)}
+                {t('added')} {formatDate(item.createdAt)}
               </Text>
             </View>
           </View>
           <View style={styles.balanceContainer}>
-            <Text style={styles.balanceLabel}>Balance</Text>
+            <Text style={styles.balanceLabel}>{t('balance')}</Text>
             <Text
               style={[
                 styles.balanceAmount,
@@ -79,11 +83,11 @@ export default function PatientsScreen() {
               {formatCurrency(Math.abs(balance))}
             </Text>
             {isPaidUp && balance === 0 && totalCharged === 0 ? (
-              <Text style={styles.balanceHint}>No visits</Text>
+              <Text style={styles.balanceHint}>{t('noVisits')}</Text>
             ) : isPaidUp ? (
-              <Text style={[styles.balanceHint, { color: colors.success }]}>Paid up</Text>
+              <Text style={[styles.balanceHint, { color: colors.success }]}>{t('paidUp')}</Text>
             ) : (
-              <Text style={[styles.balanceHint, { color: colors.danger }]}>Outstanding</Text>
+              <Text style={[styles.balanceHint, { color: colors.danger }]}>{t('outstandingLabel')}</Text>
             )}
           </View>
         </View>
@@ -91,12 +95,14 @@ export default function PatientsScreen() {
     );
   };
 
+  const patientNoun = patients.length === 1 ? t('patient') : t('patients');
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Patients</Text>
+        <Text style={styles.title}>{t('patientsTitle')}</Text>
         <Text style={styles.subtitle}>
-          {patients.length} {patients.length === 1 ? 'patient' : 'patients'} total
+          {patients.length} {patientNoun} {t('total')}
         </Text>
       </View>
 
@@ -109,7 +115,7 @@ export default function PatientsScreen() {
             style={styles.searchIcon}
           />
           <Input
-            placeholder="Search by name or phone..."
+            placeholder={t('searchByNameOrPhone')}
             value={search}
             onChangeText={setSearch}
             style={styles.searchInput}
@@ -123,15 +129,15 @@ export default function PatientsScreen() {
         search.length > 0 ? (
           <EmptyState
             icon="search-outline"
-            title="No Results"
-            message={`No patients found matching "${search}"`}
+            title={t('noResults')}
+            message={`${t('noPatientFound')} "${search}"`}
           />
         ) : (
           <EmptyState
             icon="people-outline"
-            title="No Patients Yet"
-            message="Add your first patient to get started"
-            actionLabel="Add Patient"
+            title={t('noPatientsYetTitle')}
+            message={t('addFirstPatient')}
+            actionLabel={t('addPatient')}
             onAction={() => navigation.navigate('AddPatient', {})}
           />
         )

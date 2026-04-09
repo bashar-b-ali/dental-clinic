@@ -2,26 +2,30 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useData } from '../context/DataContext';
+import { useLanguage } from '../i18n/LanguageContext';
 import Card from '../components/Card';
 import StatusBadge from '../components/StatusBadge';
 import { colors, spacing, fontSize, borderRadius, shadow } from '../utils/theme';
 import { wp, ms } from '../utils/responsive';
-import { formatCurrency, formatDate, getToday, getPatientName, getAppointmentTotal, getIncomeForPeriod, getWeekRange, getMonthRange } from '../utils/helpers';
-
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
-}
+import { formatCurrency, formatDate, getToday, getPatientName, getAppointmentTotal, getIncomeForPeriod, getMonthRange } from '../utils/helpers';
 
 export default function DashboardScreen() {
   const navigation = useNavigation<any>();
   const { doctor, patients, appointments, payments, isLoading, refreshData } = useData();
+  const { t, language } = useLanguage();
+  const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = React.useState(false);
 
   const today = getToday();
+
+  function getGreeting(): string {
+    const hour = new Date().getHours();
+    if (hour < 12) return t('goodMorning');
+    if (hour < 17) return t('goodAfternoon');
+    return t('goodEvening');
+  }
 
   const todaysAppointments = useMemo(
     () =>
@@ -69,7 +73,7 @@ export default function DashboardScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.md }]}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
@@ -84,7 +88,7 @@ export default function DashboardScreen() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.greeting}>{getGreeting()},</Text>
-          <Text style={styles.doctorName}>Dr. {doctor?.name ?? 'Doctor'}</Text>
+          <Text style={styles.doctorName}>{language === 'ar' ? 'د. ' : 'Dr. '}{doctor?.name ?? (language === 'ar' ? 'طبيب' : 'Doctor')}</Text>
         </View>
         <TouchableOpacity
           style={styles.settingsButton}
@@ -102,7 +106,7 @@ export default function DashboardScreen() {
             <Ionicons name="calendar-outline" size={ms(20)} color="rgba(255,255,255,0.85)" />
           </View>
           <Text style={styles.statValue}>{todaysAppointments.length}</Text>
-          <Text style={styles.statLabel}>Today's Appts</Text>
+          <Text style={styles.statLabel}>{t('todaysAppts')}</Text>
         </View>
 
         <View style={[styles.statCard, { backgroundColor: colors.success }]}>
@@ -110,7 +114,7 @@ export default function DashboardScreen() {
             <Ionicons name="trending-up-outline" size={ms(20)} color="rgba(255,255,255,0.85)" />
           </View>
           <Text style={styles.statValue}>{formatCurrency(monthStats.collected)}</Text>
-          <Text style={styles.statLabel}>This Month</Text>
+          <Text style={styles.statLabel}>{t('thisMonth')}</Text>
         </View>
 
         <View style={[styles.statCard, { backgroundColor: colors.warning }]}>
@@ -118,7 +122,7 @@ export default function DashboardScreen() {
             <Ionicons name="wallet-outline" size={ms(20)} color="rgba(255,255,255,0.85)" />
           </View>
           <Text style={styles.statValue}>{formatCurrency(outstandingBalance)}</Text>
-          <Text style={styles.statLabel}>Outstanding</Text>
+          <Text style={styles.statLabel}>{t('outstanding')}</Text>
         </View>
       </View>
 
@@ -127,7 +131,7 @@ export default function DashboardScreen() {
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
             <Ionicons name="today-outline" size={ms(20)} color={colors.primary} />
-            <Text style={styles.sectionTitle}>Today's Appointments</Text>
+            <Text style={styles.sectionTitle}>{t('todaysAppointments')}</Text>
           </View>
           <Text style={styles.sectionCount}>{todaysAppointments.length}</Text>
         </View>
@@ -136,8 +140,8 @@ export default function DashboardScreen() {
           <Card>
             <View style={styles.emptyState}>
               <Ionicons name="calendar-clear-outline" size={ms(40)} color={colors.textMuted} />
-              <Text style={styles.emptyTitle}>No appointments today</Text>
-              <Text style={styles.emptySubtitle}>Enjoy your free time or schedule something new</Text>
+              <Text style={styles.emptyTitle}>{t('noAppointmentsToday')}</Text>
+              <Text style={styles.emptySubtitle}>{t('enjoyFreeTime')}</Text>
             </View>
           </Card>
         ) : (
@@ -173,7 +177,7 @@ export default function DashboardScreen() {
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
             <Ionicons name="flash-outline" size={ms(20)} color={colors.primary} />
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
+            <Text style={styles.sectionTitle}>{t('quickActions')}</Text>
           </View>
         </View>
 
@@ -186,7 +190,7 @@ export default function DashboardScreen() {
             <View style={[styles.actionIconCircle, { backgroundColor: colors.primary }]}>
               <Ionicons name="person-add-outline" size={ms(22)} color={colors.textOnPrimary} />
             </View>
-            <Text style={[styles.actionLabel, { color: colors.primaryDark }]}>New Patient</Text>
+            <Text style={[styles.actionLabel, { color: colors.primaryDark }]}>{t('newPatient')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -197,7 +201,7 @@ export default function DashboardScreen() {
             <View style={[styles.actionIconCircle, { backgroundColor: colors.success }]}>
               <Ionicons name="add-circle-outline" size={ms(22)} color={colors.textOnPrimary} />
             </View>
-            <Text style={[styles.actionLabel, { color: colors.success }]}>New Appointment</Text>
+            <Text style={[styles.actionLabel, { color: colors.success }]}>{t('newAppointment')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -207,7 +211,7 @@ export default function DashboardScreen() {
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
             <Ionicons name="people-outline" size={ms(20)} color={colors.primary} />
-            <Text style={styles.sectionTitle}>Recent Patients</Text>
+            <Text style={styles.sectionTitle}>{t('recentPatients')}</Text>
           </View>
         </View>
 
@@ -215,8 +219,8 @@ export default function DashboardScreen() {
           <Card>
             <View style={styles.emptyState}>
               <Ionicons name="people-outline" size={ms(40)} color={colors.textMuted} />
-              <Text style={styles.emptyTitle}>No patients yet</Text>
-              <Text style={styles.emptySubtitle}>Add your first patient to get started</Text>
+              <Text style={styles.emptyTitle}>{t('noPatientsYet')}</Text>
+              <Text style={styles.emptySubtitle}>{t('addFirstPatient')}</Text>
             </View>
           </Card>
         ) : (
@@ -236,7 +240,7 @@ export default function DashboardScreen() {
                     {patient.name}
                   </Text>
                   <Text style={styles.patientMeta}>
-                    Added {formatDate(patient.createdAt)}
+                    {t('added')} {formatDate(patient.createdAt)}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={ms(18)} color={colors.textMuted} />
@@ -258,7 +262,6 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xl,
     paddingBottom: spacing.xl,
   },
 

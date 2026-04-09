@@ -3,10 +3,12 @@ import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, KeyboardAv
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useData } from '../context/DataContext';
+import { useLanguage } from '../i18n/LanguageContext';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import ToothChart from '../components/ToothChart';
+import DatePicker from '../components/DatePicker';
 import { colors, spacing, fontSize, borderRadius } from '../utils/theme';
 import { Appointment, ToothWork, MaterialUsed, ExpenseItem } from '../types';
 import { getToday, DENTAL_PROCEDURES, COMMON_MATERIALS, formatCurrency } from '../utils/helpers';
@@ -22,6 +24,7 @@ export default function AddAppointmentScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { patients, addAppointment, updateAppointment } = useData();
+  const { t } = useLanguage();
 
   const editingAppointment: Appointment | undefined = route.params?.appointment;
   const isEditing = !!editingAppointment;
@@ -155,11 +158,11 @@ export default function AddAppointmentScreen() {
 
   const handleSave = async () => {
     if (!patientId) {
-      Alert.alert('Error', 'Please select a patient.');
+      Alert.alert(t('error'), t('pleaseSelectPatient'));
       return;
     }
     if (!date) {
-      Alert.alert('Error', 'Please enter a date.');
+      Alert.alert(t('error'), t('pleaseEnterDate'));
       return;
     }
 
@@ -191,20 +194,26 @@ export default function AddAppointmentScreen() {
 
       navigation.goBack();
     } catch (err) {
-      Alert.alert('Error', 'Failed to save appointment.');
+      Alert.alert(t('error'), t('failedToSave'));
     } finally {
       setSaving(false);
     }
   };
 
   const expenseCategories: ExpenseItem['category'][] = ['material', 'rental', 'lab', 'other'];
+  const categoryLabels: Record<string, string> = {
+    material: t('catMaterial'),
+    rental: t('catRental'),
+    lab: t('catLab'),
+    other: t('catOther'),
+  };
 
   // ---- Render ----
 
-  const renderSectionHeader = (title: string, icon: string) => (
+  const renderSectionHeader = (titleKey: string, icon: string) => (
     <View style={styles.sectionHeader}>
       <Ionicons name={icon as any} size={20} color={colors.primary} />
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <Text style={styles.sectionTitle}>{t(titleKey)}</Text>
     </View>
   );
 
@@ -216,7 +225,7 @@ export default function AddAppointmentScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         {/* Patient Selection */}
         <Card>
-          {renderSectionHeader('Patient', 'person-outline')}
+          {renderSectionHeader('sectionPatient', 'person-outline')}
           <TouchableOpacity
             style={styles.selector}
             onPress={() => setPatientModalVisible(true)}
@@ -234,7 +243,7 @@ export default function AddAppointmentScreen() {
                     !selectedPatient && styles.selectorPlaceholder,
                   ]}
                 >
-                  {selectedPatient?.name ?? 'Select a patient'}
+                  {selectedPatient?.name ?? t('selectPatient')}
                 </Text>
                 {selectedPatient?.phone && (
                   <Text style={styles.selectorSub}>{selectedPatient.phone}</Text>
@@ -247,19 +256,12 @@ export default function AddAppointmentScreen() {
 
         {/* Date & Time */}
         <Card>
-          {renderSectionHeader('Schedule', 'calendar-outline')}
-          <View style={styles.row}>
+          {renderSectionHeader('sectionSchedule', 'calendar-outline')}
+          <DatePicker selectedDate={date} onSelectDate={setDate} />
+          <View style={[styles.row, { marginTop: spacing.md }]}>
             <View style={styles.halfField}>
               <Input
-                label="Date (YYYY-MM-DD)"
-                value={date}
-                onChangeText={setDate}
-                placeholder="2025-01-15"
-              />
-            </View>
-            <View style={styles.halfField}>
-              <Input
-                label="Time (HH:MM)"
+                label={t('timeLabel')}
                 value={time}
                 onChangeText={setTime}
                 placeholder="09:30"
@@ -270,18 +272,18 @@ export default function AddAppointmentScreen() {
 
         {/* Chief Complaint & Diagnosis */}
         <Card>
-          {renderSectionHeader('Clinical Details', 'medkit-outline')}
+          {renderSectionHeader('sectionClinical', 'medkit-outline')}
           <Input
-            label="Chief Complaint"
+            label={t('chiefComplaint')}
             value={chiefComplaint}
             onChangeText={setChiefComplaint}
-            placeholder="Patient's main concern"
+            placeholder={t('chiefComplaintPlaceholder')}
           />
           <Input
-            label="Diagnosis"
+            label={t('diagnosis')}
             value={diagnosis}
             onChangeText={setDiagnosis}
-            placeholder="Clinical diagnosis"
+            placeholder={t('diagnosisPlaceholder')}
             multiline
             numberOfLines={3}
             style={styles.multiline}
@@ -290,14 +292,14 @@ export default function AddAppointmentScreen() {
 
         {/* Tooth Chart */}
         <Card>
-          {renderSectionHeader('Tooth Chart', 'grid-outline')}
+          {renderSectionHeader('sectionToothChart', 'grid-outline')}
           <ToothChart selectedTeeth={selectedTeeth} onToggleTooth={handleToggleTooth} />
         </Card>
 
         {/* Teeth Work Details */}
         {teethWork.length > 0 && (
           <Card>
-            {renderSectionHeader('Teeth Work Details', 'construct-outline')}
+            {renderSectionHeader('sectionTeethWork', 'construct-outline')}
             {teethWork.map((tw, index) => (
               <View key={tw.toothNumber} style={styles.teethWorkRow}>
                 <View style={styles.toothBadge}>
@@ -318,12 +320,12 @@ export default function AddAppointmentScreen() {
                       ]}
                       numberOfLines={1}
                     >
-                      {tw.procedure || 'Select procedure'}
+                      {tw.procedure || t('selectProcedure')}
                     </Text>
                     <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
                   </TouchableOpacity>
                   <Input
-                    placeholder="Notes"
+                    placeholder={t('notesPlaceholder')}
                     value={tw.notes ?? ''}
                     onChangeText={(val) => updateToothWork(index, 'notes', val)}
                     style={styles.smallInput}
@@ -336,7 +338,7 @@ export default function AddAppointmentScreen() {
 
         {/* Materials Used */}
         <Card>
-          {renderSectionHeader('Materials Used', 'flask-outline')}
+          {renderSectionHeader('sectionMaterials', 'flask-outline')}
           {materialsUsed.map((mat, index) => (
             <View key={index} style={styles.materialRow}>
               <View style={styles.materialHeader}>
@@ -354,7 +356,7 @@ export default function AddAppointmentScreen() {
                     ]}
                     numberOfLines={1}
                   >
-                    {mat.name || 'Select material'}
+                    {mat.name || t('selectMaterial')}
                   </Text>
                   <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
                 </TouchableOpacity>
@@ -368,7 +370,7 @@ export default function AddAppointmentScreen() {
               <View style={styles.row}>
                 <View style={styles.halfField}>
                   <Input
-                    label="Quantity"
+                    label={t('quantity')}
                     value={mat.quantity.toString()}
                     onChangeText={(val) =>
                       updateMaterial(index, 'quantity', parseInt(val) || 0)
@@ -379,7 +381,7 @@ export default function AddAppointmentScreen() {
                 </View>
                 <View style={styles.halfField}>
                   <Input
-                    label="Unit Cost"
+                    label={t('unitCost')}
                     value={mat.unitCost ? mat.unitCost.toString() : ''}
                     onChangeText={(val) =>
                       updateMaterial(index, 'unitCost', parseFloat(val) || 0)
@@ -390,12 +392,12 @@ export default function AddAppointmentScreen() {
                 </View>
               </View>
               <Text style={styles.subtotalText}>
-                Subtotal: {formatCurrency(mat.quantity * mat.unitCost)}
+                {t('subtotal')}: {formatCurrency(mat.quantity * mat.unitCost)}
               </Text>
             </View>
           ))}
           <Button
-            title="Add Material"
+            title={t('addMaterial')}
             variant="ghost"
             size="sm"
             onPress={addMaterial}
@@ -405,9 +407,9 @@ export default function AddAppointmentScreen() {
 
         {/* Procedure Fee */}
         <Card>
-          {renderSectionHeader('Fees', 'cash-outline')}
+          {renderSectionHeader('sectionFees', 'cash-outline')}
           <Input
-            label="Procedure Fee"
+            label={t('procedureFee')}
             value={procedureFee}
             onChangeText={setProcedureFee}
             keyboardType="numeric"
@@ -417,15 +419,15 @@ export default function AddAppointmentScreen() {
 
         {/* Additional Expenses */}
         <Card>
-          {renderSectionHeader('Additional Expenses', 'receipt-outline')}
+          {renderSectionHeader('sectionExpenses', 'receipt-outline')}
           {additionalExpenses.map((exp, index) => (
             <View key={index} style={styles.expenseRow}>
               <View style={styles.materialHeader}>
                 <Input
-                  label="Description"
+                  label={t('description')}
                   value={exp.description}
                   onChangeText={(val) => updateExpense(index, 'description', val)}
-                  placeholder="Expense description"
+                  placeholder={t('expenseDescription')}
                   style={styles.expenseDescInput}
                 />
                 <TouchableOpacity
@@ -438,7 +440,7 @@ export default function AddAppointmentScreen() {
               <View style={styles.row}>
                 <View style={styles.halfField}>
                   <Input
-                    label="Amount"
+                    label={t('amount')}
                     value={exp.amount ? exp.amount.toString() : ''}
                     onChangeText={(val) =>
                       updateExpense(index, 'amount', parseFloat(val) || 0)
@@ -448,7 +450,7 @@ export default function AddAppointmentScreen() {
                   />
                 </View>
                 <View style={styles.halfField}>
-                  <Text style={styles.fieldLabel}>Category</Text>
+                  <Text style={styles.fieldLabel}>{t('category')}</Text>
                   <TouchableOpacity
                     style={styles.pickerButton}
                     onPress={() => {
@@ -457,7 +459,7 @@ export default function AddAppointmentScreen() {
                     }}
                   >
                     <Text style={styles.pickerButtonText}>
-                      {exp.category.charAt(0).toUpperCase() + exp.category.slice(1)}
+                      {categoryLabels[exp.category] ?? exp.category}
                     </Text>
                     <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
                   </TouchableOpacity>
@@ -466,7 +468,7 @@ export default function AddAppointmentScreen() {
             </View>
           ))}
           <Button
-            title="Add Expense"
+            title={t('addExpense')}
             variant="ghost"
             size="sm"
             onPress={addExpense}
@@ -476,9 +478,9 @@ export default function AddAppointmentScreen() {
 
         {/* Payment */}
         <Card>
-          {renderSectionHeader('Payment', 'wallet-outline')}
+          {renderSectionHeader('sectionPayment', 'wallet-outline')}
           <Input
-            label="Amount Paid"
+            label={t('amountPaid')}
             value={amountPaid}
             onChangeText={setAmountPaid}
             keyboardType="numeric"
@@ -488,12 +490,12 @@ export default function AddAppointmentScreen() {
 
         {/* Notes */}
         <Card>
-          {renderSectionHeader('Notes', 'document-text-outline')}
+          {renderSectionHeader('sectionNotes', 'document-text-outline')}
           <Input
-            label="Additional Notes"
+            label={t('additionalNotes')}
             value={notes}
             onChangeText={setNotes}
-            placeholder="Any additional notes..."
+            placeholder={t('anyAdditionalNotes')}
             multiline
             numberOfLines={4}
             style={styles.multiline}
@@ -502,32 +504,32 @@ export default function AddAppointmentScreen() {
 
         {/* Total Summary */}
         <Card style={styles.summaryCard}>
-          {renderSectionHeader('Total Summary', 'calculator-outline')}
+          {renderSectionHeader('sectionSummary', 'calculator-outline')}
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Procedure Fee</Text>
+            <Text style={styles.summaryLabel}>{t('procedureFee')}</Text>
             <Text style={styles.summaryValue}>{formatCurrency(fee)}</Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Materials</Text>
+            <Text style={styles.summaryLabel}>{t('materials')}</Text>
             <Text style={styles.summaryValue}>{formatCurrency(materialsCost)}</Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Additional Expenses</Text>
+            <Text style={styles.summaryLabel}>{t('additionalExpenses')}</Text>
             <Text style={styles.summaryValue}>{formatCurrency(expensesCost)}</Text>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
-            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalLabel}>{t('total')}</Text>
             <Text style={styles.totalValue}>{formatCurrency(total)}</Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Amount Paid</Text>
+            <Text style={styles.summaryLabel}>{t('amountPaid')}</Text>
             <Text style={[styles.summaryValue, { color: colors.success }]}>
               {formatCurrency(parseFloat(amountPaid) || 0)}
             </Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Balance Due</Text>
+            <Text style={styles.summaryLabel}>{t('balanceDue')}</Text>
             <Text
               style={[
                 styles.summaryValue,
@@ -546,7 +548,7 @@ export default function AddAppointmentScreen() {
 
         {/* Save Button */}
         <Button
-          title={isEditing ? 'Update Appointment' : 'Save Appointment'}
+          title={isEditing ? t('updateAppointment') : t('saveAppointment')}
           onPress={handleSave}
           loading={saving}
           size="lg"
@@ -568,13 +570,13 @@ export default function AddAppointmentScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Patient</Text>
+              <Text style={styles.modalTitle}>{t('selectPatientTitle')}</Text>
               <TouchableOpacity onPress={() => setPatientModalVisible(false)}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
             <Input
-              placeholder="Search by name or phone..."
+              placeholder={t('searchByNameOrPhone')}
               value={patientSearch}
               onChangeText={setPatientSearch}
               style={styles.searchInput}
@@ -618,7 +620,7 @@ export default function AddAppointmentScreen() {
                 </TouchableOpacity>
               )}
               ListEmptyComponent={
-                <Text style={styles.emptyText}>No patients found</Text>
+                <Text style={styles.emptyText}>{t('noPatientFound2')}</Text>
               }
               style={styles.modalList}
             />
@@ -631,7 +633,7 @@ export default function AddAppointmentScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Procedure</Text>
+              <Text style={styles.modalTitle}>{t('selectProcedureTitle')}</Text>
               <TouchableOpacity onPress={() => setProcedureModalVisible(false)}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
@@ -685,7 +687,7 @@ export default function AddAppointmentScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Material</Text>
+              <Text style={styles.modalTitle}>{t('selectMaterialTitle')}</Text>
               <TouchableOpacity onPress={() => setMaterialModalVisible(false)}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
@@ -734,14 +736,13 @@ export default function AddAppointmentScreen() {
               style={styles.customOptionButton}
               onPress={() => {
                 setMaterialModalVisible(false);
-                // Leave the name field empty so the user can type a custom name
                 if (materialModalIndex >= 0) {
                   updateMaterial(materialModalIndex, 'name', '');
                 }
               }}
             >
               <Ionicons name="create-outline" size={18} color={colors.primary} />
-              <Text style={styles.customOptionText}>Enter custom name instead</Text>
+              <Text style={styles.customOptionText}>{t('enterCustomName')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -752,7 +753,7 @@ export default function AddAppointmentScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainerSmall}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Category</Text>
+              <Text style={styles.modalTitle}>{t('selectCategoryTitle')}</Text>
               <TouchableOpacity
                 onPress={() => setExpenseCategoryModalVisible(false)}
               >
@@ -783,7 +784,7 @@ export default function AddAppointmentScreen() {
                       isSelected && styles.optionTextSelected,
                     ]}
                   >
-                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                    {categoryLabels[cat] ?? cat}
                   </Text>
                   {isSelected && (
                     <Ionicons name="checkmark" size={20} color={colors.primary} />

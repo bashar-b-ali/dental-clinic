@@ -1,25 +1,96 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert, Modal, TextInput, Dimensions } from 'react-native';
+import React, { useState, useRef, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Image,
+  TouchableOpacity,
+  Alert,
+  Modal,
+  TextInput,
+  Dimensions,
+  FlatList,
+  StatusBar,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Sharing from 'expo-sharing';
 import { useData } from '../context/DataContext';
+import { useLanguage } from '../i18n/LanguageContext';
 import Button from '../components/Button';
-import { colors, spacing, fontSize, borderRadius } from '../utils/theme';
+import { colors, spacing, fontSize, borderRadius, shadow } from '../utils/theme';
 import { formatDate, getPatientName } from '../utils/helpers';
+import { ms } from '../utils/responsive';
+import { PatientFile } from '../types';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const IMAGE_HEIGHT = SCREEN_WIDTH * 0.75;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 function getFileIcon(fileType: string): keyof typeof Ionicons.glyphMap {
   switch (fileType) {
-    case 'pdf':
-      return 'document-text';
-    case 'document':
-      return 'document';
-    default:
-      return 'document-outline';
+    case 'pdf': return 'document-text';
+    case 'document': return 'document';
+    default: return 'document-outline';
   }
+}
+
+// Zoomable image component
+function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
+  const scrollRef = useRef<ScrollView>(null);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const lastTap = useRef(0);
+
+  const handleTap = () => {
+    const now = Date.now();
+    if (now - lastTap.current < 300) {
+      // Double tap - toggle zoom
+      if (isZoomed) {
+        scrollRef.current?.scrollTo({ x: 0, y: 0, animated: true });
+        // @ts-ignore - setNativeProps exists
+        scrollRef.current?.setNativeProps?.({ zoomScale: 1 });
+        setIsZoomed(false);
+      } else {
+        setIsZoomed(true);
+      }
+      lastTap.current = 0;
+    } else {
+      lastTap.current = now;
+      // Single tap after timeout
+      setTimeout(() => {
+        if (lastTap.current === now) {
+          onTap();
+        }
+      }, 300);
+    }
+  };
+
+  return (
+    <ScrollView
+      ref={scrollRef}
+      maximumZoomScale={5}
+      minimumZoomScale={1}
+      showsHorizontalScrollIndicator={false}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={styles.zoomContent}
+      centerContent
+      bounces={false}
+      onScrollEndDrag={(e) => {
+        const scale = e.nativeEvent.zoomScale;
+        setIsZoomed(scale > 1.05);
+      }}
+    >
+      <TouchableOpacity activeOpacity={1} onPress={handleTap}>
+        <Image
+          source={{ uri }}
+          style={styles.fullImage}
+          resizeMode="contain"
+        />
+      </TouchableOpacity>
+    </ScrollView>
+  );
 }
 
 export default function FileViewerScreen() {
@@ -27,192 +98,404 @@ export default function FileViewerScreen() {
   const route = useRoute<any>();
   const { fileId } = route.params;
   const { patientFiles, patients, appointments, updatePatientFile, deletePatientFile } = useData();
+  const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
 
   const file = patientFiles.find((f) => f.id === fileId);
 
+  // Get all image files for the same patient for gallery swiping
+  const siblingImages = patientFiles
+    .filter((f) => f.patientId === file?.patientId && f.fileType === 'image')
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  const initialIndex = siblingImages.findIndex((f) => f.id === fileId);
+  const [currentIndex, setCurrentIndex] = useState(Math.max(0, initialIndex));
+  const [overlayVisible, setOverlayVisible] = useState(true);
   const [notesModalVisible, setNotesModalVisible] = useState(false);
   const [editedNotes, setEditedNotes] = useState(file?.notes ?? '');
   const [appointmentModalVisible, setAppointmentModalVisible] = useState(false);
+  const [detailsVisible, setDetailsVisible] = useState(false);
+  const flatListRef = useRef<FlatList>(null);
 
-  if (!file) {
+  const currentFile = file?.fileType === 'image' ? siblingImages[currentIndex] : file;
+
+  if (!file || !currentFile) {
     return (
       <View style={styles.centered}>
         <Ionicons name="alert-circle-outline" size={64} color={colors.textMuted} />
-        <Text style={styles.notFoundText}>File not found</Text>
-        <Button title="Go Back" onPress={() => navigation.goBack()} variant="secondary" style={{ marginTop: spacing.md }} />
+        <Text style={styles.notFoundText}>{t('fileNotFound')}</Text>
+        <Button title={t('goBack')} onPress={() => navigation.goBack()} variant="secondary" style={{ marginTop: spacing.md }} />
       </View>
     );
   }
 
   const isImage = file.fileType === 'image';
-  const patientName = getPatientName(file.patientId, patients);
-  const linkedAppointment = file.appointmentId
-    ? appointments.find((a) => a.id === file.appointmentId)
+  const patientName = getPatientName(currentFile.patientId, patients);
+  const linkedAppointment = currentFile.appointmentId
+    ? appointments.find((a) => a.id === currentFile.appointmentId)
     : null;
-  const patientAppointments = appointments.filter((a) => a.patientId === file.patientId);
+  const patientAppointments = appointments.filter((a) => a.patientId === currentFile.patientId);
 
   const handleShare = async () => {
     try {
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
-        Alert.alert('Sharing not available', 'Sharing is not supported on this device.');
+        Alert.alert(t('error'), t('sharingNotAvailable'));
         return;
       }
-      await Sharing.shareAsync(file.localPath);
+      await Sharing.shareAsync(currentFile.localPath);
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to share file.');
+      Alert.alert(t('error'), err.message || t('failedToShare'));
     }
   };
 
   const handleSaveNotes = async () => {
-    await updatePatientFile({ ...file, notes: editedNotes.trim() || undefined });
+    await updatePatientFile({ ...currentFile, notes: editedNotes.trim() || undefined });
     setNotesModalVisible(false);
   };
 
   const handleLinkAppointment = async (appointmentId: string | undefined) => {
-    await updatePatientFile({ ...file, appointmentId });
+    await updatePatientFile({ ...currentFile, appointmentId });
     setAppointmentModalVisible(false);
   };
 
   const handleDelete = () => {
     Alert.alert(
-      'Delete File',
-      `Are you sure you want to delete "${file.fileName}"? This action cannot be undone.`,
+      t('deleteFile'),
+      t('deleteFileConfirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('delete'),
           style: 'destructive',
           onPress: async () => {
-            await deletePatientFile(file.id);
-            navigation.goBack();
+            await deletePatientFile(currentFile.id);
+            if (isImage && siblingImages.length > 1) {
+              // Stay in gallery, adjust index
+              const newIndex = Math.min(currentIndex, siblingImages.length - 2);
+              setCurrentIndex(newIndex);
+            } else {
+              navigation.goBack();
+            }
           },
         },
       ],
     );
   };
 
-  return (
-    <View style={styles.container}>
-      <ScrollView style={styles.scrollView} bounces={false}>
-        {/* Image / File Preview */}
-        {isImage ? (
-          <View style={styles.imageContainer}>
-            <ScrollView
-              maximumZoomScale={3}
-              minimumZoomScale={1}
-              showsHorizontalScrollIndicator={false}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.zoomContainer}
-            >
-              <Image
-                source={{ uri: file.localPath }}
-                style={styles.image}
-                resizeMode="contain"
-              />
-            </ScrollView>
+  const toggleOverlay = () => setOverlayVisible((v) => !v);
+
+  const onPageChange = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+    setCurrentIndex(idx);
+  }, []);
+
+  // -------- IMAGE GALLERY MODE --------
+  if (isImage) {
+    return (
+      <View style={styles.galleryContainer}>
+        <StatusBar barStyle="light-content" />
+
+        {/* Gallery */}
+        <FlatList
+          ref={flatListRef}
+          data={siblingImages}
+          keyExtractor={(item) => item.id}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          initialScrollIndex={initialIndex >= 0 ? initialIndex : 0}
+          getItemLayout={(_, index) => ({
+            length: SCREEN_WIDTH,
+            offset: SCREEN_WIDTH * index,
+            index,
+          })}
+          onMomentumScrollEnd={onPageChange}
+          renderItem={({ item }) => (
+            <View style={styles.galleryPage}>
+              <ZoomableImage uri={item.localPath} onTap={toggleOverlay} />
+            </View>
+          )}
+        />
+
+        {/* Top overlay */}
+        {overlayVisible && (
+          <View style={[styles.topOverlay, { paddingTop: insets.top + spacing.xs }]}>
+            <TouchableOpacity style={styles.overlayButton} onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={ms(22)} color="#fff" />
+            </TouchableOpacity>
+
+            <View style={styles.counterContainer}>
+              <Text style={styles.counterText}>
+                {currentIndex + 1} {t('imageOf')} {siblingImages.length}
+              </Text>
+            </View>
+
+            <TouchableOpacity style={styles.overlayButton} onPress={() => setDetailsVisible(true)}>
+              <Ionicons name="information-circle-outline" size={ms(24)} color="#fff" />
+            </TouchableOpacity>
           </View>
-        ) : (
-          <View style={styles.filePreviewContainer}>
-            <Ionicons name={getFileIcon(file.fileType)} size={80} color={colors.textMuted} />
-            <Text style={styles.filePreviewName} numberOfLines={2}>
-              {file.fileName}
-            </Text>
-            <View style={styles.fileTypeBadgeLarge}>
-              <Text style={styles.fileTypeBadgeLargeText}>{file.fileType.toUpperCase()}</Text>
+        )}
+
+        {/* Bottom overlay */}
+        {overlayVisible && (
+          <View style={[styles.bottomOverlay, { paddingBottom: insets.bottom + spacing.sm }]}>
+            {/* File info strip */}
+            {currentFile.notes ? (
+              <Text style={styles.overlayNotes} numberOfLines={2}>{currentFile.notes}</Text>
+            ) : null}
+            {linkedAppointment && (
+              <View style={styles.overlayAppointmentChip}>
+                <Ionicons name="calendar-outline" size={ms(12)} color={colors.primaryLight} />
+                <Text style={styles.overlayAppointmentText}>
+                  {formatDate(linkedAppointment.date)}
+                </Text>
+              </View>
+            )}
+
+            {/* Action bar */}
+            <View style={styles.actionBar}>
+              <TouchableOpacity style={styles.actionBarButton} onPress={handleShare}>
+                <Ionicons name="share-outline" size={ms(22)} color="#fff" />
+                <Text style={styles.actionBarLabel}>{t('share')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionBarButton}
+                onPress={() => {
+                  setEditedNotes(currentFile.notes ?? '');
+                  setNotesModalVisible(true);
+                }}
+              >
+                <Ionicons name="create-outline" size={ms(22)} color="#fff" />
+                <Text style={styles.actionBarLabel}>{t('editNotes')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionBarButton}
+                onPress={() => setAppointmentModalVisible(true)}
+              >
+                <Ionicons name="link-outline" size={ms(22)} color="#fff" />
+                <Text style={styles.actionBarLabel}>{currentFile.appointmentId ? t('changeAppointmentLink') : t('linkToAppointment')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.actionBarButton} onPress={handleDelete}>
+                <Ionicons name="trash-outline" size={ms(22)} color="#ff6b6b" />
+                <Text style={[styles.actionBarLabel, { color: '#ff6b6b' }]}>{t('delete')}</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* Details Card */}
-        <View style={styles.detailsCard}>
-          {/* File Name */}
-          <Text style={styles.fileName}>{file.fileName}</Text>
+        {/* Details bottom sheet */}
+        <Modal visible={detailsVisible} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.detailsSheet}>
+              <View style={styles.sheetHandle} />
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{currentFile.fileName}</Text>
+                <TouchableOpacity onPress={() => setDetailsVisible(false)}>
+                  <Ionicons name="close" size={24} color={colors.text} />
+                </TouchableOpacity>
+              </View>
 
-          {/* File Type Badge */}
-          <View style={styles.metaRow}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{file.fileType.toUpperCase()}</Text>
+              <View style={styles.infoSection}>
+                <View style={styles.infoRow}>
+                  <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} />
+                  <Text style={styles.infoLabel}>{t('dateAdded')}</Text>
+                  <Text style={styles.infoValue}>{formatDate(currentFile.createdAt)}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <Ionicons name="person-outline" size={18} color={colors.textSecondary} />
+                  <Text style={styles.infoLabel}>{t('tab_patients')}</Text>
+                  <Text style={styles.infoValue}>{patientName}</Text>
+                </View>
+                {linkedAppointment && (
+                  <View style={styles.infoRow}>
+                    <Ionicons name="link-outline" size={18} color={colors.textSecondary} />
+                    <Text style={styles.infoLabel}>{t('appointment')}</Text>
+                    <Text style={styles.infoValue}>
+                      {formatDate(linkedAppointment.date)} - {linkedAppointment.time}
+                    </Text>
+                  </View>
+                )}
+                {currentFile.notes && (
+                  <View style={styles.infoRow}>
+                    <Ionicons name="document-text-outline" size={18} color={colors.textSecondary} />
+                    <Text style={styles.infoLabel}>{t('sectionNotes')}</Text>
+                    <Text style={styles.infoValue}>{currentFile.notes}</Text>
+                  </View>
+                )}
+              </View>
+
+              <Button title={t('close')} onPress={() => setDetailsVisible(false)} variant="ghost" />
             </View>
           </View>
+        </Modal>
 
-          {/* Info Rows */}
+        {/* Notes Modal */}
+        <Modal visible={notesModalVisible} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{t('editNotes')}</Text>
+                <TouchableOpacity onPress={() => setNotesModalVisible(false)}>
+                  <Ionicons name="close" size={24} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={styles.notesInput}
+                value={editedNotes}
+                onChangeText={setEditedNotes}
+                placeholder={t('addNotesAboutFile')}
+                placeholderTextColor={colors.textMuted}
+                multiline
+                textAlignVertical="top"
+                autoFocus
+              />
+              <View style={styles.modalActions}>
+                <Button title={t('cancel')} onPress={() => setNotesModalVisible(false)} variant="ghost" />
+                <Button title={t('save')} onPress={handleSaveNotes} />
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Link Appointment Modal */}
+        <Modal visible={appointmentModalVisible} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{t('linkToAppointment')}</Text>
+                <TouchableOpacity onPress={() => setAppointmentModalVisible(false)}>
+                  <Ionicons name="close" size={24} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.appointmentList}>
+                {currentFile.appointmentId && (
+                  <TouchableOpacity
+                    style={styles.unlinkRow}
+                    onPress={() => handleLinkAppointment(undefined)}
+                  >
+                    <Ionicons name="unlink-outline" size={20} color={colors.danger} />
+                    <Text style={styles.unlinkText}>{t('unlinkAppointment')}</Text>
+                  </TouchableOpacity>
+                )}
+
+                {patientAppointments.length === 0 && (
+                  <Text style={styles.emptyText}>{t('noAppointmentsForPatient')}</Text>
+                )}
+
+                {patientAppointments
+                  .sort((a, b) => b.date.localeCompare(a.date))
+                  .map((apt) => {
+                    const isLinked = apt.id === currentFile.appointmentId;
+                    return (
+                      <TouchableOpacity
+                        key={apt.id}
+                        style={[styles.appointmentRow, isLinked && styles.appointmentRowActive]}
+                        onPress={() => handleLinkAppointment(apt.id)}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.appointmentDate}>
+                            {formatDate(apt.date)} - {apt.time}
+                          </Text>
+                          {apt.chiefComplaint ? (
+                            <Text style={styles.appointmentComplaint} numberOfLines={1}>
+                              {apt.chiefComplaint}
+                            </Text>
+                          ) : null}
+                        </View>
+                        {isLinked && (
+                          <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+              </ScrollView>
+
+              <View style={styles.modalActions}>
+                <Button title={t('close')} onPress={() => setAppointmentModalVisible(false)} variant="ghost" />
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    );
+  }
+
+  // -------- NON-IMAGE FILE MODE --------
+  return (
+    <View style={styles.container}>
+      <ScrollView style={styles.scrollView} bounces={false}>
+        <View style={styles.filePreviewContainer}>
+          <Ionicons name={getFileIcon(file.fileType)} size={80} color={colors.textMuted} />
+          <Text style={styles.filePreviewName} numberOfLines={2}>{file.fileName}</Text>
+          <View style={styles.fileTypeBadge}>
+            <Text style={styles.fileTypeBadgeText}>{file.fileType.toUpperCase()}</Text>
+          </View>
+        </View>
+
+        <View style={styles.detailsCard}>
+          <Text style={styles.fileName}>{file.fileName}</Text>
+
           <View style={styles.infoSection}>
             <View style={styles.infoRow}>
               <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Date Added</Text>
+              <Text style={styles.infoLabel}>{t('dateAdded')}</Text>
               <Text style={styles.infoValue}>{formatDate(file.createdAt)}</Text>
             </View>
-
             <View style={styles.infoRow}>
               <Ionicons name="person-outline" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Patient</Text>
+              <Text style={styles.infoLabel}>{t('tab_patients')}</Text>
               <Text style={styles.infoValue}>{patientName}</Text>
             </View>
-
             {linkedAppointment && (
               <View style={styles.infoRow}>
                 <Ionicons name="link-outline" size={18} color={colors.textSecondary} />
-                <Text style={styles.infoLabel}>Appointment</Text>
+                <Text style={styles.infoLabel}>{t('appointment')}</Text>
                 <Text style={styles.infoValue}>
-                  {formatDate(linkedAppointment.date)} at {linkedAppointment.time}
+                  {formatDate(linkedAppointment.date)} - {linkedAppointment.time}
                 </Text>
               </View>
             )}
           </View>
 
-          {/* Notes */}
-          <TouchableOpacity style={styles.notesSection} onPress={() => { setEditedNotes(file.notes ?? ''); setNotesModalVisible(true); }}>
+          <TouchableOpacity
+            style={styles.notesSection}
+            onPress={() => { setEditedNotes(file.notes ?? ''); setNotesModalVisible(true); }}
+          >
             <View style={styles.notesSectionHeader}>
               <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
-              <Text style={styles.notesLabel}>Notes</Text>
+              <Text style={styles.notesLabel}>{t('sectionNotes')}</Text>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </View>
             <Text style={file.notes ? styles.notesText : styles.notesPlaceholder}>
-              {file.notes || 'Tap to add notes...'}
+              {file.notes || t('tapToAddNotes')}
             </Text>
           </TouchableOpacity>
 
-          {/* Action Buttons */}
           <View style={styles.actions}>
+            <Button title={t('share')} onPress={handleShare} variant="secondary"
+              icon={<Ionicons name="share-outline" size={18} color={colors.primary} />} style={styles.actionButton} />
+            <Button title={t('editNotes')} onPress={() => { setEditedNotes(file.notes ?? ''); setNotesModalVisible(true); }} variant="secondary"
+              icon={<Ionicons name="create-outline" size={18} color={colors.primary} />} style={styles.actionButton} />
             <Button
-              title="Share"
-              onPress={handleShare}
-              variant="secondary"
-              icon={<Ionicons name="share-outline" size={18} color={colors.primary} />}
-              style={styles.actionButton}
-            />
-            <Button
-              title="Edit Notes"
-              onPress={() => { setEditedNotes(file.notes ?? ''); setNotesModalVisible(true); }}
-              variant="secondary"
-              icon={<Ionicons name="create-outline" size={18} color={colors.primary} />}
-              style={styles.actionButton}
-            />
-            <Button
-              title={file.appointmentId ? 'Change Appointment' : 'Link to Appointment'}
-              onPress={() => setAppointmentModalVisible(true)}
-              variant="secondary"
-              icon={<Ionicons name="link-outline" size={18} color={colors.primary} />}
-              style={styles.actionButton}
-            />
-            <Button
-              title="Delete"
-              onPress={handleDelete}
-              variant="danger"
-              icon={<Ionicons name="trash-outline" size={18} color={colors.danger} />}
-              style={styles.actionButton}
-            />
+              title={file.appointmentId ? t('changeAppointmentLink') : t('linkToAppointment')}
+              onPress={() => setAppointmentModalVisible(true)} variant="secondary"
+              icon={<Ionicons name="link-outline" size={18} color={colors.primary} />} style={styles.actionButton} />
+            <Button title={t('delete')} onPress={handleDelete} variant="danger"
+              icon={<Ionicons name="trash-outline" size={18} color={colors.danger} />} style={styles.actionButton} />
           </View>
         </View>
       </ScrollView>
 
-      {/* Back Button (floating) */}
       <TouchableOpacity
-        style={[styles.backButton, isImage ? styles.backButtonDark : styles.backButtonLight]}
+        style={[styles.backButton, styles.backButtonLight]}
         onPress={() => navigation.goBack()}
       >
-        <Ionicons name="arrow-back" size={24} color={isImage ? '#fff' : colors.text} />
+        <Ionicons name="arrow-back" size={24} color={colors.text} />
       </TouchableOpacity>
 
       {/* Notes Modal */}
@@ -220,7 +503,7 @@ export default function FileViewerScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Notes</Text>
+              <Text style={styles.modalTitle}>{t('editNotes')}</Text>
               <TouchableOpacity onPress={() => setNotesModalVisible(false)}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
@@ -229,15 +512,13 @@ export default function FileViewerScreen() {
               style={styles.notesInput}
               value={editedNotes}
               onChangeText={setEditedNotes}
-              placeholder="Add notes about this file..."
+              placeholder={t('addNotesAboutFile')}
               placeholderTextColor={colors.textMuted}
-              multiline
-              textAlignVertical="top"
-              autoFocus
+              multiline textAlignVertical="top" autoFocus
             />
             <View style={styles.modalActions}>
-              <Button title="Cancel" onPress={() => setNotesModalVisible(false)} variant="ghost" />
-              <Button title="Save" onPress={handleSaveNotes} />
+              <Button title={t('cancel')} onPress={() => setNotesModalVisible(false)} variant="ghost" />
+              <Button title={t('save')} onPress={handleSaveNotes} />
             </View>
           </View>
         </View>
@@ -248,55 +529,39 @@ export default function FileViewerScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Link to Appointment</Text>
+              <Text style={styles.modalTitle}>{t('linkToAppointment')}</Text>
               <TouchableOpacity onPress={() => setAppointmentModalVisible(false)}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
-
             <ScrollView style={styles.appointmentList}>
-              {file.appointmentId && (
-                <TouchableOpacity
-                  style={styles.unlinkRow}
-                  onPress={() => handleLinkAppointment(undefined)}
-                >
+              {currentFile.appointmentId && (
+                <TouchableOpacity style={styles.unlinkRow} onPress={() => handleLinkAppointment(undefined)}>
                   <Ionicons name="unlink-outline" size={20} color={colors.danger} />
-                  <Text style={styles.unlinkText}>Unlink Appointment</Text>
+                  <Text style={styles.unlinkText}>{t('unlinkAppointment')}</Text>
                 </TouchableOpacity>
               )}
-
               {patientAppointments.length === 0 && (
-                <Text style={styles.emptyText}>No appointments found for this patient.</Text>
+                <Text style={styles.emptyText}>{t('noAppointmentsForPatient')}</Text>
               )}
-
-              {patientAppointments.map((apt) => {
-                const isLinked = apt.id === file.appointmentId;
+              {patientAppointments.sort((a, b) => b.date.localeCompare(a.date)).map((apt) => {
+                const isLinked = apt.id === currentFile.appointmentId;
                 return (
-                  <TouchableOpacity
-                    key={apt.id}
+                  <TouchableOpacity key={apt.id}
                     style={[styles.appointmentRow, isLinked && styles.appointmentRowActive]}
                     onPress={() => handleLinkAppointment(apt.id)}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.appointmentDate}>
-                        {formatDate(apt.date)} at {apt.time}
-                      </Text>
-                      {apt.chiefComplaint ? (
-                        <Text style={styles.appointmentComplaint} numberOfLines={1}>
-                          {apt.chiefComplaint}
-                        </Text>
-                      ) : null}
+                      <Text style={styles.appointmentDate}>{formatDate(apt.date)} - {apt.time}</Text>
+                      {apt.chiefComplaint ? <Text style={styles.appointmentComplaint} numberOfLines={1}>{apt.chiefComplaint}</Text> : null}
                     </View>
-                    {isLinked && (
-                      <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
-                    )}
+                    {isLinked && <Ionicons name="checkmark-circle" size={22} color={colors.primary} />}
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
-
             <View style={styles.modalActions}>
-              <Button title="Close" onPress={() => setAppointmentModalVisible(false)} variant="ghost" />
+              <Button title={t('close')} onPress={() => setAppointmentModalVisible(false)} variant="ghost" />
             </View>
           </View>
         </View>
@@ -306,6 +571,122 @@ export default function FileViewerScreen() {
 }
 
 const styles = StyleSheet.create({
+  // Gallery mode
+  galleryContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  galleryPage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  zoomContent: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullImage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT * 0.85,
+  },
+
+  // Top overlay
+  topOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  overlayButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  counterContainer: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+  },
+  counterText: {
+    color: '#fff',
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+  },
+
+  // Bottom overlay
+  bottomOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  overlayNotes: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: fontSize.sm,
+    marginBottom: spacing.sm,
+    lineHeight: 20,
+  },
+  overlayAppointmentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  overlayAppointmentText: {
+    color: colors.primaryLight,
+    fontSize: fontSize.xs,
+    fontWeight: '500',
+  },
+  actionBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: spacing.sm,
+  },
+  actionBarButton: {
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+  },
+  actionBarLabel: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: ms(10),
+    fontWeight: '500',
+  },
+
+  // Details sheet
+  detailsSheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+    maxHeight: '60%',
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: spacing.md,
+  },
+
+  // Non-image mode
   container: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -326,27 +707,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
 
-  // Image display
-  imageContainer: {
-    width: SCREEN_WIDTH,
-    height: IMAGE_HEIGHT,
-    backgroundColor: '#111',
-  },
-  zoomContainer: {
-    width: SCREEN_WIDTH,
-    height: IMAGE_HEIGHT,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  image: {
-    width: SCREEN_WIDTH,
-    height: IMAGE_HEIGHT,
-  },
-
-  // Non-image file preview
   filePreviewContainer: {
     width: SCREEN_WIDTH,
-    height: IMAGE_HEIGHT,
+    height: SCREEN_WIDTH * 0.75,
     backgroundColor: colors.borderLight,
     justifyContent: 'center',
     alignItems: 'center',
@@ -359,20 +722,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.md,
   },
-  fileTypeBadgeLarge: {
+  fileTypeBadge: {
     marginTop: spacing.sm,
     backgroundColor: colors.primaryBg,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.sm,
   },
-  fileTypeBadgeLargeText: {
+  fileTypeBadgeText: {
     fontSize: fontSize.xs,
     fontWeight: '700',
     color: colors.primary,
   },
 
-  // Back button
   backButton: {
     position: 'absolute',
     top: 48,
@@ -383,16 +745,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  backButtonDark: {
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
   backButtonLight: {
     backgroundColor: 'rgba(255,255,255,0.85)',
     borderWidth: 1,
     borderColor: colors.border,
   },
 
-  // Details card
   detailsCard: {
     backgroundColor: colors.card,
     borderTopLeftRadius: borderRadius.lg,
@@ -406,25 +764,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  badge: {
-    backgroundColor: colors.primaryBg,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-  },
-  badgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    color: colors.primary,
-    letterSpacing: 0.5,
-  },
 
-  // Info section
   infoSection: {
     marginTop: spacing.lg,
     gap: spacing.sm + 4,
@@ -446,7 +786,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // Notes section
   notesSection: {
     marginTop: spacing.lg,
     backgroundColor: colors.bg,
@@ -476,7 +815,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  // Actions
   actions: {
     marginTop: spacing.lg,
     gap: spacing.sm,
@@ -485,7 +823,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
 
-  // Modal
+  // Modals
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -525,8 +863,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.md,
   },
-
-  // Appointment list
   appointmentList: {
     maxHeight: 320,
   },
