@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-expo-app@latest . --template blank-typescript)",
+      "Read(//d/Projects/git/**)",
+      "Bash(npx create-expo-app@latest mobo-dental --template blank-typescript)",
+      "Bash(cp -r /d/Projects/git/mobo-dental/* /d/Projects/git/mobo/)",
+      "Bash(cp /d/Projects/git/mobo-dental/.gitignore /d/Projects/git/mobo/)",
+      "Bash(npx expo:*)",
+      "Bash(ls /d/Projects/git/mobo/src/screens/Settings*)",
+      "Bash(npx tsc:*)",
+      "Bash(node -e \"const fs = require\\('expo-file-system'\\); console.log\\(Object.keys\\(fs\\).filter\\(k => k.match\\(/document|encoding|Directory/i\\)\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(wc:*)",
+      "Bash(npm install:*)",
+      "Bash(npm list:*)",
+      "Bash(grep:*)",
+      "Bash(ls -la /d/Projects/git/mobo/.git*)"
+    ]
+  }
+}

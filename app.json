@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "MoBo Dental",
+    "slug": "mobo-dental",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#E8F4FD"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mobo.dental"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#E8F4FD"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.mobo.dental"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MoBo Dental needs access to your photos to attach patient files.",
+          "cameraPermission": "MoBo Dental needs access to your camera to take patient photos."
+        }
+      ]
+    ]
+  }
+}
