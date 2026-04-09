@@ -54,7 +54,7 @@ export default function OnboardingScreen() {
         copyToCacheDirectory: true,
       });
 
-      if (result.canceled) return;
+      if (result.canceled || !result.assets?.length) return;
 
       const file = result.assets[0];
       if (!file?.uri) return;

@@ -117,7 +117,9 @@ export default function FileViewerScreen() {
   const [detailsVisible, setDetailsVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
-  const currentFile = file?.fileType === 'image' ? siblingImages[currentIndex] : file;
+  const currentFile = file?.fileType === 'image' && siblingImages.length > 0
+    ? siblingImages[currentIndex] ?? file
+    : file;
 
   if (!file || !currentFile) {
     return (

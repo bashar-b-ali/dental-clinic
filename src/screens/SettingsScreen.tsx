@@ -128,7 +128,7 @@ export default function SettingsScreen() {
   const importDataFromFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({ type: 'application/json' });
-      if (result.canceled) return;
+      if (result.canceled || !result.assets?.length) return;
 
       const file = result.assets[0];
       const content = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.UTF8 });
