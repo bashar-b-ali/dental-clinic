@@ -12,3 +12,5 @@ ios/
 web-build/
 .env
 .env.*
+.idea/
+*.keystore
