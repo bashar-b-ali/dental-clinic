@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import {
   State as GestureState,
   PinchGestureHandlerStateChangeEvent,
   PanGestureHandlerStateChangeEvent,
+  PanGestureHandlerGestureEvent,
 } from 'react-native-gesture-handler';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,12 +31,13 @@ import { useData } from '../context/DataContext';
 import { useLanguage } from '../i18n/LanguageContext';
 import Button from '../components/Button';
 import CustomAlert, { useAlert } from '../components/CustomAlert';
-import { colors, spacing, fontSize, borderRadius, shadow } from '../utils/theme';
+import { colors, spacing, fontSize, borderRadius } from '../utils/theme';
 import { formatDate, getPatientName } from '../utils/helpers';
-import { ms } from '../utils/responsive';
+import { ms, wp } from '../utils/responsive';
 import { PatientFile } from '../types';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const DISMISS_THRESHOLD = 120;
 
 function getFileIcon(fileType: string): keyof typeof Ionicons.glyphMap {
   switch (fileType) {
@@ -45,8 +47,18 @@ function getFileIcon(fileType: string): keyof typeof Ionicons.glyphMap {
   }
 }
 
-// Samsung-style zoomable + pannable image with boundary clamping
-function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
+// iOS-style zoomable image with smooth animations
+function ZoomableImage({
+  uri,
+  onTap,
+  onZoomChange,
+  onDismiss,
+}: {
+  uri: string;
+  onTap: () => void;
+  onZoomChange: (zoomed: boolean) => void;
+  onDismiss: () => void;
+}) {
   const pinchRef = useRef<PinchGestureHandler>(null);
   const panRef = useRef<PanGestureHandler>(null);
 
@@ -62,10 +74,24 @@ function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
   const lastOffsetX = useRef(0);
   const lastOffsetY = useRef(0);
 
+  // Dismiss gesture
+  const dismissTranslateY = useRef(new Animated.Value(0)).current;
+  const bgOpacity = dismissTranslateY.interpolate({
+    inputRange: [-DISMISS_THRESHOLD, 0, DISMISS_THRESHOLD],
+    outputRange: [0.3, 1, 0.3],
+    extrapolate: 'clamp',
+  });
+  const dismissScale = dismissTranslateY.interpolate({
+    inputRange: [-DISMISS_THRESHOLD * 2, 0, DISMISS_THRESHOLD * 2],
+    outputRange: [0.85, 1, 0.85],
+    extrapolate: 'clamp',
+  });
+
   const lastTap = useRef(0);
+  const isZoomed = useRef(false);
+  const isDismissing = useRef(false);
 
   const clampOffset = (scale: number) => {
-    // How far the image can move before showing blank space
     const maxX = (SCREEN_WIDTH * (scale - 1)) / 2;
     const maxY = (SCREEN_HEIGHT * 0.85 * (scale - 1)) / 2;
     lastOffsetX.current = Math.min(maxX, Math.max(-maxX, lastOffsetX.current));
@@ -77,9 +103,23 @@ function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
     lastOffsetY.current = 0;
     translateX.flattenOffset();
     translateY.flattenOffset();
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
-    Animated.spring(translateY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+    Animated.parallel([
+      Animated.spring(translateX, { toValue: 0, useNativeDriver: true, tension: 60, friction: 9 }),
+      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 60, friction: 9 }),
+    ]).start();
   };
+
+  const resetZoom = () => {
+    baseScaleRef.current = 1;
+    isZoomed.current = false;
+    onZoomChange(false);
+    pinchScale.setValue(1);
+    Animated.spring(savedScale, { toValue: 1, useNativeDriver: true, tension: 60, friction: 9 }).start();
+    resetPosition();
+  };
+
+  // Expose reset for parent
+  (ZoomableImage as any).__resetRef = resetZoom;
 
   // Pinch
   const onPinchEvent = Animated.event(
@@ -96,11 +136,10 @@ function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
       pinchScale.setValue(1);
 
       if (clamped <= 1.05) {
-        baseScaleRef.current = 1;
-        Animated.spring(savedScale, { toValue: 1, useNativeDriver: true }).start();
-        resetPosition();
+        resetZoom();
       } else {
-        // Clamp position after zoom change
+        isZoomed.current = true;
+        onZoomChange(true);
         clampOffset(clamped);
         translateX.flattenOffset();
         translateX.setValue(lastOffsetX.current);
@@ -112,24 +151,47 @@ function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
     }
   };
 
-  // Pan
-  const onPanEvent = Animated.event(
-    [{ nativeEvent: { translationX: translateX, translationY: translateY } }],
-    { useNativeDriver: true },
-  );
+  // Pan — handles both zoom-pan and swipe-to-dismiss
+  const onPanEvent = (event: PanGestureHandlerGestureEvent) => {
+    const { translationX: tx, translationY: ty } = event.nativeEvent;
+    if (isZoomed.current) {
+      translateX.setValue(tx);
+      translateY.setValue(ty);
+    } else {
+      // Swipe down to dismiss
+      dismissTranslateY.setValue(ty);
+    }
+  };
 
   const onPanStateChange = (event: PanGestureHandlerStateChangeEvent) => {
     if (event.nativeEvent.oldState === GestureState.ACTIVE) {
-      if (baseScaleRef.current <= 1.05) {
-        resetPosition();
-      } else {
+      const { translationY: ty, velocityY: vy } = event.nativeEvent;
+
+      if (isZoomed.current) {
         lastOffsetX.current += event.nativeEvent.translationX;
-        lastOffsetY.current += event.nativeEvent.translationY;
+        lastOffsetY.current += ty;
         clampOffset(baseScaleRef.current);
         translateX.setOffset(lastOffsetX.current);
         translateX.setValue(0);
         translateY.setOffset(lastOffsetY.current);
         translateY.setValue(0);
+      } else {
+        // Check if should dismiss
+        if (Math.abs(ty) > DISMISS_THRESHOLD || Math.abs(vy) > 800) {
+          isDismissing.current = true;
+          Animated.timing(dismissTranslateY, {
+            toValue: ty > 0 ? SCREEN_HEIGHT : -SCREEN_HEIGHT,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => onDismiss());
+        } else {
+          Animated.spring(dismissTranslateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 65,
+            friction: 8,
+          }).start();
+        }
       }
     }
   };
@@ -137,14 +199,15 @@ function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
   const handleTap = () => {
     const now = Date.now();
     if (now - lastTap.current < 300) {
+      // Double tap
       pinchScale.setValue(1);
       if (baseScaleRef.current > 1.05) {
-        baseScaleRef.current = 1;
-        Animated.spring(savedScale, { toValue: 1, useNativeDriver: true }).start();
-        resetPosition();
+        resetZoom();
       } else {
         baseScaleRef.current = 2.5;
-        Animated.spring(savedScale, { toValue: 2.5, useNativeDriver: true }).start();
+        isZoomed.current = true;
+        onZoomChange(true);
+        Animated.spring(savedScale, { toValue: 2.5, useNativeDriver: true, tension: 60, friction: 9 }).start();
       }
       lastTap.current = 0;
     } else {
@@ -153,51 +216,53 @@ function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
         if (lastTap.current === now) {
           onTap();
         }
-      }, 300);
+      }, 250);
     }
   };
 
   return (
-    <PanGestureHandler
-      ref={panRef}
-      onGestureEvent={onPanEvent}
-      onHandlerStateChange={onPanStateChange}
-      simultaneousHandlers={pinchRef}
-      minPointers={1}
-      maxPointers={2}
-      activeOffsetX={[-10, 10]}
-      activeOffsetY={[-10, 10]}
-    >
-      <Animated.View style={styles.zoomContent}>
-        <PinchGestureHandler
-          ref={pinchRef}
-          onGestureEvent={onPinchEvent}
-          onHandlerStateChange={onPinchStateChange}
-          simultaneousHandlers={panRef}
-        >
-          <Animated.View
-            style={[
-              styles.zoomContent,
-              {
-                transform: [
-                  { scale: displayScale },
-                  { translateX },
-                  { translateY },
-                ],
-              },
-            ]}
+    <Animated.View style={[styles.galleryPage, { opacity: bgOpacity }]}>
+      <PanGestureHandler
+        ref={panRef}
+        onGestureEvent={onPanEvent}
+        onHandlerStateChange={onPanStateChange}
+        simultaneousHandlers={pinchRef}
+        minPointers={1}
+        maxPointers={2}
+        activeOffsetX={isZoomed.current ? [-5, 5] : [-999, 999]}
+        activeOffsetY={[-10, 10]}
+      >
+        <Animated.View style={[styles.zoomContent, { transform: [{ translateY: isZoomed.current ? new Animated.Value(0) : dismissTranslateY }, { scale: dismissScale }] }]}>
+          <PinchGestureHandler
+            ref={pinchRef}
+            onGestureEvent={onPinchEvent}
+            onHandlerStateChange={onPinchStateChange}
+            simultaneousHandlers={panRef}
           >
-            <TouchableOpacity activeOpacity={1} onPress={handleTap}>
-              <Image
-                source={{ uri }}
-                style={styles.fullImage}
-                resizeMode="contain"
-              />
-            </TouchableOpacity>
-          </Animated.View>
-        </PinchGestureHandler>
-      </Animated.View>
-    </PanGestureHandler>
+            <Animated.View
+              style={[
+                styles.zoomContent,
+                {
+                  transform: [
+                    { scale: displayScale },
+                    { translateX },
+                    { translateY },
+                  ],
+                },
+              ]}
+            >
+              <TouchableOpacity activeOpacity={1} onPress={handleTap}>
+                <Image
+                  source={{ uri }}
+                  style={styles.fullImage}
+                  resizeMode="contain"
+                />
+              </TouchableOpacity>
+            </Animated.View>
+          </PinchGestureHandler>
+        </Animated.View>
+      </PanGestureHandler>
+    </Animated.View>
   );
 }
 
@@ -224,11 +289,38 @@ export default function FileViewerScreen() {
   const [editedNotes, setEditedNotes] = useState(file?.notes ?? '');
   const [appointmentModalVisible, setAppointmentModalVisible] = useState(false);
   const [detailsVisible, setDetailsVisible] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const overlayAnim = useRef(new Animated.Value(1)).current;
+  const autoHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const currentFile = file?.fileType === 'image' && siblingImages.length > 0
     ? siblingImages[currentIndex] ?? file
     : file;
+
+  // Auto-hide overlay after 3s
+  const scheduleAutoHide = useCallback(() => {
+    if (autoHideTimer.current) clearTimeout(autoHideTimer.current);
+    autoHideTimer.current = setTimeout(() => {
+      setOverlayVisible(false);
+      Animated.timing(overlayAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start();
+    }, 3500);
+  }, [overlayAnim]);
+
+  useEffect(() => {
+    scheduleAutoHide();
+    return () => { if (autoHideTimer.current) clearTimeout(autoHideTimer.current); };
+  }, [scheduleAutoHide]);
+
+  const toggleOverlay = useCallback(() => {
+    if (autoHideTimer.current) clearTimeout(autoHideTimer.current);
+    setOverlayVisible((v) => {
+      const next = !v;
+      Animated.timing(overlayAnim, { toValue: next ? 1 : 0, duration: 200, useNativeDriver: true }).start();
+      if (next) scheduleAutoHide();
+      return next;
+    });
+  }, [overlayAnim, scheduleAutoHide]);
 
   if (!file || !currentFile) {
     return (
@@ -282,7 +374,6 @@ export default function FileViewerScreen() {
           onPress: async () => {
             await deletePatientFile(currentFile.id);
             if (isImage && siblingImages.length > 1) {
-              // Stay in gallery, adjust index
               const newIndex = Math.min(currentIndex, siblingImages.length - 2);
               setCurrentIndex(newIndex);
             } else {
@@ -294,12 +385,13 @@ export default function FileViewerScreen() {
     );
   };
 
-  const toggleOverlay = () => setOverlayVisible((v) => !v);
-
   const onPageChange = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-    setCurrentIndex(idx);
-  }, []);
+    if (idx !== currentIndex) {
+      setCurrentIndex(idx);
+      setIsZoomed(false);
+    }
+  }, [currentIndex]);
 
   // -------- IMAGE GALLERY MODE --------
   if (isImage) {
@@ -314,9 +406,9 @@ export default function FileViewerScreen() {
           keyExtractor={(item) => item.id}
           horizontal
           pagingEnabled
+          scrollEnabled={!isZoomed}
           showsHorizontalScrollIndicator={false}
-          bounces={false}
-          overScrollMode="never"
+          bounces={!isZoomed}
           initialScrollIndex={initialIndex >= 0 ? initialIndex : 0}
           getItemLayout={(_, index) => ({
             length: SCREEN_WIDTH,
@@ -325,79 +417,98 @@ export default function FileViewerScreen() {
           })}
           onMomentumScrollEnd={onPageChange}
           renderItem={({ item }) => (
-            <View style={styles.galleryPage}>
-              <ZoomableImage uri={item.localPath} onTap={toggleOverlay} />
-            </View>
+            <ZoomableImage
+              uri={item.localPath}
+              onTap={toggleOverlay}
+              onZoomChange={setIsZoomed}
+              onDismiss={() => navigation.goBack()}
+            />
           )}
         />
 
-        {/* Top overlay */}
-        {overlayVisible && (
-          <View style={[styles.topOverlay, { paddingTop: insets.top + spacing.xs }]}>
-            <TouchableOpacity style={styles.overlayButton} onPress={() => navigation.goBack()}>
-              <Ionicons name="arrow-back" size={ms(22)} color="#fff" />
-            </TouchableOpacity>
+        {/* Top overlay — animated fade */}
+        <Animated.View
+          pointerEvents={overlayVisible ? 'auto' : 'none'}
+          style={[styles.topOverlay, { paddingTop: insets.top + spacing.xs, opacity: overlayAnim }]}
+        >
+          <TouchableOpacity style={styles.overlayButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="chevron-back" size={ms(26)} color="#fff" />
+          </TouchableOpacity>
 
-            <View style={styles.counterContainer}>
-              <Text style={styles.counterText}>
-                {currentIndex + 1} {t('imageOf')} {siblingImages.length}
+          <View style={styles.counterContainer}>
+            <Text style={styles.counterText}>
+              {currentIndex + 1} / {siblingImages.length}
+            </Text>
+          </View>
+
+          <TouchableOpacity style={styles.overlayButton} onPress={() => setDetailsVisible(true)}>
+            <Ionicons name="information-circle-outline" size={ms(24)} color="#fff" />
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Bottom overlay — animated fade */}
+        <Animated.View
+          pointerEvents={overlayVisible ? 'auto' : 'none'}
+          style={[styles.bottomOverlay, { paddingBottom: insets.bottom + spacing.sm, opacity: overlayAnim }]}
+        >
+          {currentFile.notes ? (
+            <Text style={styles.overlayNotes} numberOfLines={2}>{currentFile.notes}</Text>
+          ) : null}
+          {linkedAppointment && (
+            <View style={styles.overlayAppointmentChip}>
+              <Ionicons name="calendar-outline" size={ms(12)} color={colors.primaryLight} />
+              <Text style={styles.overlayAppointmentText}>
+                {formatDate(linkedAppointment.date)}
               </Text>
             </View>
+          )}
 
-            <TouchableOpacity style={styles.overlayButton} onPress={() => setDetailsVisible(true)}>
-              <Ionicons name="information-circle-outline" size={ms(24)} color="#fff" />
+          {/* Action bar */}
+          <View style={styles.actionBar}>
+            <TouchableOpacity style={styles.actionBarButton} onPress={handleShare}>
+              <Ionicons name="share-outline" size={ms(22)} color="#fff" />
+              <Text style={styles.actionBarLabel}>{t('share')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionBarButton}
+              onPress={() => {
+                setEditedNotes(currentFile.notes ?? '');
+                setNotesModalVisible(true);
+              }}
+            >
+              <Ionicons name="create-outline" size={ms(22)} color="#fff" />
+              <Text style={styles.actionBarLabel}>{t('editNotes')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionBarButton}
+              onPress={() => setAppointmentModalVisible(true)}
+            >
+              <Ionicons name="link-outline" size={ms(22)} color="#fff" />
+              <Text style={styles.actionBarLabel}>{currentFile.appointmentId ? t('changeAppointmentLink') : t('linkToAppointment')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionBarButton} onPress={handleDelete}>
+              <Ionicons name="trash-outline" size={ms(22)} color="#ff6b6b" />
+              <Text style={[styles.actionBarLabel, { color: '#ff6b6b' }]}>{t('delete')}</Text>
             </TouchableOpacity>
           </View>
-        )}
+        </Animated.View>
 
-        {/* Bottom overlay */}
-        {overlayVisible && (
-          <View style={[styles.bottomOverlay, { paddingBottom: insets.bottom + spacing.sm }]}>
-            {/* File info strip */}
-            {currentFile.notes ? (
-              <Text style={styles.overlayNotes} numberOfLines={2}>{currentFile.notes}</Text>
-            ) : null}
-            {linkedAppointment && (
-              <View style={styles.overlayAppointmentChip}>
-                <Ionicons name="calendar-outline" size={ms(12)} color={colors.primaryLight} />
-                <Text style={styles.overlayAppointmentText}>
-                  {formatDate(linkedAppointment.date)}
-                </Text>
-              </View>
-            )}
-
-            {/* Action bar */}
-            <View style={styles.actionBar}>
-              <TouchableOpacity style={styles.actionBarButton} onPress={handleShare}>
-                <Ionicons name="share-outline" size={ms(22)} color="#fff" />
-                <Text style={styles.actionBarLabel}>{t('share')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.actionBarButton}
-                onPress={() => {
-                  setEditedNotes(currentFile.notes ?? '');
-                  setNotesModalVisible(true);
-                }}
-              >
-                <Ionicons name="create-outline" size={ms(22)} color="#fff" />
-                <Text style={styles.actionBarLabel}>{t('editNotes')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.actionBarButton}
-                onPress={() => setAppointmentModalVisible(true)}
-              >
-                <Ionicons name="link-outline" size={ms(22)} color="#fff" />
-                <Text style={styles.actionBarLabel}>{currentFile.appointmentId ? t('changeAppointmentLink') : t('linkToAppointment')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.actionBarButton} onPress={handleDelete}>
-                <Ionicons name="trash-outline" size={ms(22)} color="#ff6b6b" />
-                <Text style={[styles.actionBarLabel, { color: '#ff6b6b' }]}>{t('delete')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+        {/* Page dots */}
+        {siblingImages.length > 1 && siblingImages.length <= 15 && (
+          <Animated.View style={[styles.dotsContainer, { bottom: insets.bottom + (overlayVisible ? wp(85) : spacing.md), opacity: overlayAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }]}>
+            {siblingImages.map((_, idx) => (
+              <View
+                key={idx}
+                style={[
+                  styles.dot,
+                  idx === currentIndex && styles.dotActive,
+                ]}
+              />
+            ))}
+          </Animated.View>
         )}
 
         {/* Details bottom sheet */}
@@ -698,6 +809,7 @@ const styles = StyleSheet.create({
     height: SCREEN_HEIGHT,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#000',
   },
   zoomContent: {
     width: SCREEN_WIDTH,
@@ -721,7 +833,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   overlayButton: {
     width: 44,
@@ -731,7 +843,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   counterContainer: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
@@ -750,7 +862,7 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   overlayNotes: {
     color: 'rgba(255,255,255,0.85)',
@@ -783,6 +895,28 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.8)',
     fontSize: ms(10),
     fontWeight: '500',
+  },
+
+  // Page dots
+  dotsContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  dotActive: {
+    backgroundColor: '#fff',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
 
   // Details sheet

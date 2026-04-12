@@ -16,6 +16,13 @@ import { Patient } from '../types';
 type FilterType = 'all' | 'withBalance' | 'paidUp';
 type SortType = 'name' | 'balance';
 
+type BillingItem = {
+  patient: Patient;
+  totalCharged: number;
+  totalPaid: number;
+  balance: number;
+};
+
 export default function BillingScreen() {
   const navigation = useNavigation<any>();
   const { patients, appointments, payments } = useData();
@@ -79,12 +86,11 @@ export default function BillingScreen() {
     { key: 'paidUp', label: t('paidUpFilter') },
   ];
 
-  const renderPatientCard = ({
-    item,
-  }: {
-    item: { patient: Patient; totalCharged: number; totalPaid: number; balance: number };
-  }) => {
+  const renderPatientCard = ({ item }: { item: BillingItem }) => {
     const isPaidUp = item.balance <= 0;
+    const paidPercent = item.totalCharged > 0
+      ? Math.min(100, Math.round((item.totalPaid / item.totalCharged) * 100))
+      : 0;
 
     return (
       <Card
@@ -93,7 +99,8 @@ export default function BillingScreen() {
         }
         style={styles.patientCard}
       >
-        <View style={styles.cardRow}>
+        {/* Top row: avatar + info + balance */}
+        <View style={styles.cardTopRow}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
               {item.patient.name.charAt(0).toUpperCase()}
@@ -105,48 +112,85 @@ export default function BillingScreen() {
             </Text>
             {item.patient.phone ? (
               <View style={styles.inlineRow}>
-                <Ionicons name="call-outline" size={ms(13)} color={colors.textMuted} />
+                <Ionicons name="call-outline" size={ms(12)} color={colors.textMuted} />
                 <Text style={styles.patientPhone}>{item.patient.phone}</Text>
               </View>
             ) : null}
-            <View style={styles.chargesRow}>
-              <Text style={styles.chargeText}>
-                {t('charged')}: {formatCurrency(item.totalCharged)}
-              </Text>
-              <Text style={styles.paidText}>
-                {t('paid')}: {formatCurrency(item.totalPaid)}
-              </Text>
-            </View>
           </View>
-          <View style={styles.balanceContainer}>
-            {isPaidUp && item.totalCharged > 0 ? (
-              <View style={styles.paidUpBadge}>
-                <Ionicons name="checkmark-circle" size={ms(20)} color={colors.success} />
-                <Text style={styles.paidUpText}>{t('paid')}</Text>
+          {isPaidUp && item.totalCharged > 0 ? (
+            <View style={styles.paidUpBadge}>
+              <Ionicons name="checkmark-circle" size={ms(18)} color={colors.success} />
+              <Text style={styles.paidUpText}>{t('paid')}</Text>
+            </View>
+          ) : item.totalCharged > 0 ? (
+            <View style={styles.balanceBadge}>
+              <Text style={styles.balanceAmount}>{formatCurrency(item.balance)}</Text>
+              <Text style={styles.balanceLabel}>{t('balance')}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Financial row */}
+        {item.totalCharged > 0 && (
+          <>
+            <View style={styles.financeRow}>
+              <View style={styles.financeItem}>
+                <Text style={styles.financeLabel}>{t('charged')}</Text>
+                <Text style={styles.financeValue}>{formatCurrency(item.totalCharged)}</Text>
               </View>
-            ) : (
-              <>
-                <Text style={styles.balanceLabel}>{t('balance')}</Text>
-                <Text
-                  style={[
-                    styles.balanceAmount,
-                    { color: item.balance > 0 ? colors.danger : colors.textMuted },
-                  ]}
-                >
+              <View style={styles.financeItem}>
+                <Text style={styles.financeLabel}>{t('paid')}</Text>
+                <Text style={[styles.financeValue, { color: colors.success }]}>
+                  {formatCurrency(item.totalPaid)}
+                </Text>
+              </View>
+              <View style={styles.financeItem}>
+                <Text style={styles.financeLabel}>{t('balance')}</Text>
+                <Text style={[styles.financeValue, { color: isPaidUp ? colors.success : colors.danger }]}>
                   {formatCurrency(item.balance)}
                 </Text>
-              </>
-            )}
-          </View>
-        </View>
+              </View>
+            </View>
+
+            {/* Progress bar */}
+            <View style={styles.progressContainer}>
+              <View style={styles.progressBar}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    {
+                      width: `${paidPercent}%`,
+                      backgroundColor: isPaidUp ? colors.success : colors.primary,
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={styles.progressText}>{paidPercent}%</Text>
+            </View>
+          </>
+        )}
+
+        {/* Record payment button */}
+        {item.balance > 0 && (
+          <TouchableOpacity
+            style={styles.recordPaymentBtn}
+            onPress={() =>
+              navigation.navigate('AddPayment', { patientId: item.patient.id })
+            }
+            activeOpacity={0.7}
+          >
+            <Ionicons name="wallet-outline" size={ms(14)} color={colors.primary} />
+            <Text style={styles.recordPaymentText}>{t('recordPayment')}</Text>
+          </TouchableOpacity>
+        )}
       </Card>
     );
   };
 
   const patientNoun = patients.length === 1 ? t('patient') : t('patients');
 
-  return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+  const ListHeader = () => (
+    <>
       <View style={styles.header}>
         <Text style={styles.title}>{t('billingTitle')}</Text>
         <Text style={styles.subtitle}>
@@ -225,44 +269,49 @@ export default function BillingScreen() {
           />
         </View>
       </View>
+    </>
+  );
 
-      {/* Patient List */}
-      {filteredAndSorted.length === 0 ? (
-        search.length > 0 ? (
-          <EmptyState
-            icon="search-outline"
-            title={t('noResults')}
-            message={`${t('noPatientFound')} "${search}"`}
-          />
-        ) : filter !== 'all' ? (
-          <EmptyState
-            icon="funnel-outline"
-            title={t('noPatientsTitle')}
-            message={
-              filter === 'withBalance'
-                ? t('noOutstandingBalance')
-                : t('noPaidUpYet')
-            }
-          />
-        ) : (
-          <EmptyState
-            icon="cash-outline"
-            title={t('noBillingData')}
-            message={t('addPatientsForBilling')}
-            actionLabel={t('addPatient')}
-            onAction={() => navigation.navigate('AddPatient', {})}
-          />
-        )
-      ) : (
-        <FlatList
-          data={filteredAndSorted}
-          keyExtractor={(item) => item.patient.id}
-          renderItem={renderPatientCard}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        />
-      )}
+  const ListEmpty = () => (
+    search.length > 0 ? (
+      <EmptyState
+        icon="search-outline"
+        title={t('noResults')}
+        message={`${t('noPatientFound')} "${search}"`}
+      />
+    ) : filter !== 'all' ? (
+      <EmptyState
+        icon="funnel-outline"
+        title={t('noPatientsTitle')}
+        message={
+          filter === 'withBalance'
+            ? t('noOutstandingBalance')
+            : t('noPaidUpYet')
+        }
+      />
+    ) : (
+      <EmptyState
+        icon="cash-outline"
+        title={t('noBillingData')}
+        message={t('addPatientsForBilling')}
+        actionLabel={t('addPatient')}
+        onAction={() => navigation.navigate('AddPatient', {})}
+      />
+    )
+  );
+
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <FlatList
+        data={filteredAndSorted}
+        keyExtractor={(item) => item.patient.id}
+        renderItem={renderPatientCard}
+        ListHeaderComponent={ListHeader}
+        ListEmptyComponent={ListEmpty}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      />
     </View>
   );
 }
@@ -273,7 +322,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   header: {
-    paddingHorizontal: spacing.md,
     paddingTop: spacing.lg,
     paddingBottom: spacing.sm,
   },
@@ -289,7 +337,6 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.md,
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
@@ -312,7 +359,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
     marginBottom: spacing.sm,
   },
   pillGroup: {
@@ -355,7 +401,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   searchContainer: {
-    paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
   },
   searchInputWrapper: {
@@ -375,24 +420,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: wp(100),
   },
+
+  // Patient card
   patientCard: {
     marginBottom: spacing.sm,
   },
-  cardRow: {
+  cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatar: {
-    width: wp(48),
-    height: wp(48),
+    width: wp(42),
+    height: wp(42),
     borderRadius: borderRadius.full,
     backgroundColor: colors.primaryBg,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
+    marginRight: spacing.sm,
   },
   avatarText: {
-    fontSize: fontSize.lg,
+    fontSize: fontSize.md,
     fontWeight: '700',
     color: colors.primary,
   },
@@ -404,7 +451,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: 2,
   },
   inlineRow: {
     flexDirection: 'row',
@@ -416,39 +462,99 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.textSecondary,
   },
-  chargesRow: {
+  paidUpBadge: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: 4,
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.successBg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
   },
-  chargeText: {
-    fontSize: ms(11),
-    color: colors.textMuted,
-  },
-  paidText: {
-    fontSize: ms(11),
-    color: colors.textMuted,
-  },
-  balanceContainer: {
-    alignItems: 'flex-end',
-    minWidth: wp(80),
-  },
-  balanceLabel: {
+  paidUpText: {
     fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginBottom: 2,
+    fontWeight: '700',
+    color: colors.success,
+  },
+  balanceBadge: {
+    alignItems: 'flex-end',
   },
   balanceAmount: {
     fontSize: fontSize.md,
     fontWeight: '700',
+    color: colors.danger,
   },
-  paidUpBadge: {
+  balanceLabel: {
+    fontSize: ms(10),
+    color: colors.textMuted,
+    marginTop: 1,
+  },
+
+  // Finance row
+  financeRow: {
+    flexDirection: 'row',
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  financeItem: {
+    flex: 1,
     alignItems: 'center',
-    gap: 2,
   },
-  paidUpText: {
+  financeLabel: {
+    fontSize: ms(10),
+    color: colors.textMuted,
+    marginBottom: 2,
+  },
+  financeValue: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.text,
+  },
+
+  // Progress bar
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  progressBar: {
+    flex: 1,
+    height: 6,
+    backgroundColor: colors.borderLight,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  progressText: {
+    fontSize: ms(10),
+    fontWeight: '700',
+    color: colors.textMuted,
+    minWidth: wp(30),
+    textAlign: 'right',
+  },
+
+  // Record payment button
+  recordPaymentBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primaryBg,
+    borderWidth: 1,
+    borderColor: colors.primary + '30',
+  },
+  recordPaymentText: {
     fontSize: fontSize.xs,
     fontWeight: '600',
-    color: colors.success,
+    color: colors.primary,
   },
 });

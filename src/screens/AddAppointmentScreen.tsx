@@ -1318,7 +1318,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    maxHeight: '80%',
+    height: '80%',
     paddingBottom: spacing.xl,
   },
   modalHeader: {
