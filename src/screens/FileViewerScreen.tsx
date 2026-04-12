@@ -6,7 +6,6 @@ import {
   ScrollView,
   Image,
   TouchableOpacity,
-  Alert,
   Modal,
   TextInput,
   Dimensions,
@@ -22,6 +21,7 @@ import * as Sharing from 'expo-sharing';
 import { useData } from '../context/DataContext';
 import { useLanguage } from '../i18n/LanguageContext';
 import Button from '../components/Button';
+import CustomAlert, { useAlert } from '../components/CustomAlert';
 import { colors, spacing, fontSize, borderRadius, shadow } from '../utils/theme';
 import { formatDate, getPatientName } from '../utils/helpers';
 import { ms } from '../utils/responsive';
@@ -100,6 +100,7 @@ export default function FileViewerScreen() {
   const { patientFiles, patients, appointments, updatePatientFile, deletePatientFile } = useData();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
+  const { alertConfig, showAlert, dismissAlert } = useAlert();
 
   const file = patientFiles.find((f) => f.id === fileId);
 
@@ -142,12 +143,12 @@ export default function FileViewerScreen() {
     try {
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
-        Alert.alert(t('error'), t('sharingNotAvailable'));
+        showAlert(t('error'), t('sharingNotAvailable'), [{ text: t('ok') }]);
         return;
       }
       await Sharing.shareAsync(currentFile.localPath);
     } catch (err: any) {
-      Alert.alert(t('error'), err.message || t('failedToShare'));
+      showAlert(t('error'), err.message || t('failedToShare'), [{ text: t('ok') }]);
     }
   };
 
@@ -162,9 +163,9 @@ export default function FileViewerScreen() {
   };
 
   const handleDelete = () => {
-    Alert.alert(
+    showAlert(
       t('deleteFile'),
-      t('deleteFileConfirm'),
+      t('deleteFileConfirmMsg'),
       [
         { text: t('cancel'), style: 'cancel' },
         {
@@ -423,6 +424,8 @@ export default function FileViewerScreen() {
             </View>
           </View>
         </Modal>
+
+        <CustomAlert {...alertConfig} onDismiss={dismissAlert} />
       </View>
     );
   }
@@ -568,6 +571,8 @@ export default function FileViewerScreen() {
           </View>
         </View>
       </Modal>
+
+      <CustomAlert {...alertConfig} onDismiss={dismissAlert} />
     </View>
   );
 }

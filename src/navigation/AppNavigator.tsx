@@ -263,7 +263,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tabIconWrapperActive: {
-    backgroundColor: colors.primaryBg,
   },
   tabLabel: {
     fontSize: fontSize.xs,

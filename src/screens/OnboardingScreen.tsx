@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -7,6 +7,7 @@ import { useData } from '../context/DataContext';
 import { useLanguage } from '../i18n/LanguageContext';
 import Input from '../components/Input';
 import Button from '../components/Button';
+import CustomAlert, { useAlert } from '../components/CustomAlert';
 import { colors, spacing, fontSize, borderRadius } from '../utils/theme';
 import { wp, ms } from '../utils/responsive';
 import { generateId } from '../utils/helpers';
@@ -21,6 +22,7 @@ export default function OnboardingScreen() {
   const [nameError, setNameError] = useState('');
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
+  const { alertConfig, showAlert, dismissAlert } = useAlert();
 
   const handleGetStarted = async () => {
     const trimmedName = name.trim();
@@ -41,7 +43,7 @@ export default function OnboardingScreen() {
       await setDoctor(doctor);
       await completeOnboarding();
     } catch (error) {
-      Alert.alert(t('error'), t('somethingWentWrong'));
+      showAlert(t('error'), t('somethingWentWrong'), [{ text: t('ok') }]);
     } finally {
       setLoading(false);
     }
@@ -64,17 +66,14 @@ export default function OnboardingScreen() {
       const data = JSON.parse(content);
 
       if (!data.doctor || !data.patients || !data.appointments || !data.payments) {
-        Alert.alert(
-          t('invalidFile'),
-          t('invalidFileMsg')
-        );
+        showAlert(t('invalidFile'), t('invalidFileMsg'), [{ text: t('ok') }]);
         return;
       }
 
       await importData(data);
-      Alert.alert(t('done'), t('importSuccess'));
+      showAlert(t('done'), t('importSuccess'), [{ text: t('ok') }]);
     } catch (error) {
-      Alert.alert(t('importFailed'), t('importFailedMsg'));
+      showAlert(t('importFailed'), t('importFailedMsg'), [{ text: t('ok') }]);
     } finally {
       setImporting(false);
     }
@@ -83,7 +82,7 @@ export default function OnboardingScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
         style={styles.flex}
@@ -164,6 +163,8 @@ export default function OnboardingScreen() {
             />
           </View>
         </View>
+
+        <CustomAlert {...alertConfig} onDismiss={dismissAlert} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

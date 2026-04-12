@@ -42,7 +42,7 @@ function isToday(dateStr: string): boolean {
 }
 
 export default function DatePicker({ selectedDate, onSelectDate }: DatePickerProps) {
-  const { t, language } = useLanguage();
+  const { t, language, isRTL } = useLanguage();
   const weekDates = getDaysOfWeek(selectedDate);
 
   const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
@@ -62,7 +62,7 @@ export default function DatePicker({ selectedDate, onSelectDate }: DatePickerPro
       {/* Month header with navigation */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigateWeek(-1)} style={styles.navButton}>
-          <Ionicons name="chevron-back" size={ms(20)} color={colors.primary} />
+          <Ionicons name={isRTL ? 'chevron-forward' : 'chevron-back'} size={ms(20)} color={colors.primary} />
         </TouchableOpacity>
 
         <TouchableOpacity onPress={goToToday} style={styles.monthContainer}>
@@ -77,7 +77,7 @@ export default function DatePicker({ selectedDate, onSelectDate }: DatePickerPro
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => navigateWeek(1)} style={styles.navButton}>
-          <Ionicons name="chevron-forward" size={ms(20)} color={colors.primary} />
+          <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={ms(20)} color={colors.primary} />
         </TouchableOpacity>
       </View>
 

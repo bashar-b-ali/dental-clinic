@@ -22,6 +22,7 @@
         "backgroundColor": "#E8F4FD"
       },
       "edgeToEdgeEnabled": true,
+      "softwareKeyboardLayoutMode": "resize",
       "package": "com.mobo.dental",
       "permissions": [
         "android.permission.RECORD_AUDIO"
@@ -38,7 +39,13 @@
           "cameraPermission": "MoBo Dental needs access to your camera to take patient photos."
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "sounds": []
+        }
+      ]
     ],
     "extra": {
       "eas": {

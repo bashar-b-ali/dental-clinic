@@ -426,9 +426,44 @@ export const translations: Record<Language, Record<string, string>> = {
     timeConflictMsg: 'There is already an appointment at this time with {patient}. Do you want to continue?',
     continueAnyway: 'Continue Anyway',
 
+    // Notifications
+    notifications: 'Notifications',
+    appointmentReminders: 'Appointment Reminders',
+    appointmentRemindersDesc: 'Get notified 30 minutes before each appointment',
+    notificationsEnabled: 'Reminders are on',
+    notificationsDisabled: 'Reminders are off',
+    notificationPermDenied: 'Permission Denied',
+    notificationPermDeniedMsg: 'Please enable notifications in your device settings to receive appointment reminders.',
+
     // Restart
     restartRequired: 'Restart Required',
     restartMsg: 'Please restart the app to apply the layout direction change.',
+
+    // Data management alerts
+    exportErrorMsg: 'An error occurred while exporting data.',
+    importErrorMsg: 'An error occurred while importing data.',
+    invalidMergeFile: 'The selected file does not contain valid dental app data.',
+    smartMerge: 'Smart Merge',
+    mergeDescription: 'This will merge new records into your existing data.\nExisting records will NOT be overwritten.',
+    mergeIncoming: 'Incoming:',
+    mergePatients: '{count} patients',
+    mergeAppointments: '{count} appointments',
+    mergePayments: '{count} payments',
+    mergeFiles: '{count} files ({attachments} with attachments)',
+    mergeBtn: 'Merge',
+    mergeAdded: 'Added:',
+    mergeNewPatients: '{count} new patients',
+    mergeNewAppointments: '{count} new appointments',
+    mergeNewPayments: '{count} new payments',
+    mergeNewFiles: '{count} new files',
+    recordsKept: 'Existing records were kept unchanged.',
+    finalConfirmation: 'Final Confirmation',
+    clearConfirmMsg: 'Are you sure you want to delete all data? This cannot be undone.',
+    clearFinalMsg: 'This will permanently delete ALL patients, appointments, payments, and settings. Are you absolutely sure?',
+    clearSuccess: 'All data has been cleared.',
+    noReportsData: 'No Data Yet',
+    noReportsDataMsg: 'Add appointments and payments to see your reports here.',
+    deleteFileConfirmMsg: 'Are you sure you want to delete this file? This cannot be undone.',
   },
 
   ar: {
@@ -856,8 +891,43 @@ export const translations: Record<Language, Record<string, string>> = {
     timeConflictMsg: 'يوجد موعد في نفس الوقت مع {patient}. هل تريد المتابعة؟',
     continueAnyway: 'متابعة',
 
+    // Notifications
+    notifications: 'الإشعارات',
+    appointmentReminders: 'تذكيرات المواعيد',
+    appointmentRemindersDesc: 'احصل على إشعار قبل 30 دقيقة من كل موعد',
+    notificationsEnabled: 'التذكيرات مفعّلة',
+    notificationsDisabled: 'التذكيرات معطّلة',
+    notificationPermDenied: 'تم رفض الإذن',
+    notificationPermDeniedMsg: 'يرجى تفعيل الإشعارات من إعدادات الجهاز لتلقي تذكيرات المواعيد.',
+
     // Restart
     restartRequired: 'إعادة تشغيل مطلوبة',
     restartMsg: 'يرجى إعادة تشغيل التطبيق لتطبيق تغيير اتجاه التصميم.',
+
+    // Data management alerts
+    exportErrorMsg: 'حدث خطأ أثناء تصدير البيانات.',
+    importErrorMsg: 'حدث خطأ أثناء استيراد البيانات.',
+    invalidMergeFile: 'الملف المحدد لا يحتوي على بيانات صالحة.',
+    smartMerge: 'دمج ذكي',
+    mergeDescription: 'سيتم دمج السجلات الجديدة مع بياناتك الحالية.\nلن يتم الكتابة فوق السجلات الموجودة.',
+    mergeIncoming: 'الوارد:',
+    mergePatients: '{count} مرضى',
+    mergeAppointments: '{count} مواعيد',
+    mergePayments: '{count} دفعات',
+    mergeFiles: '{count} ملفات ({attachments} مع مرفقات)',
+    mergeBtn: 'دمج',
+    mergeAdded: 'تمت الإضافة:',
+    mergeNewPatients: '{count} مرضى جدد',
+    mergeNewAppointments: '{count} مواعيد جديدة',
+    mergeNewPayments: '{count} دفعات جديدة',
+    mergeNewFiles: '{count} ملفات جديدة',
+    recordsKept: 'تم الحفاظ على السجلات الموجودة دون تغيير.',
+    finalConfirmation: 'تأكيد نهائي',
+    clearConfirmMsg: 'هل أنت متأكد من حذف جميع البيانات؟ لا يمكن التراجع عن هذا.',
+    clearFinalMsg: 'سيتم حذف جميع المرضى والمواعيد والدفعات والإعدادات نهائياً. هل أنت متأكد تماماً؟',
+    clearSuccess: 'تم مسح جميع البيانات.',
+    noReportsData: 'لا توجد بيانات بعد',
+    noReportsDataMsg: 'أضف مواعيد ودفعات لرؤية تقاريرك هنا.',
+    deleteFileConfirmMsg: 'هل أنت متأكد من حذف هذا الملف؟ لا يمكن التراجع عن هذا.',
   },
 };

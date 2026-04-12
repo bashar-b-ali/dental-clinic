@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Alert, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Modal, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
@@ -9,6 +9,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import EmptyState from '../components/EmptyState';
+import CustomAlert, { useAlert } from '../components/CustomAlert';
 import { colors, spacing, fontSize, borderRadius, shadow } from '../utils/theme';
 import { formatDate } from '../utils/helpers';
 import { copyFileToPrivate } from '../utils/storage';
@@ -57,6 +58,7 @@ export default function PatientFilesScreen() {
 
   const { patients, appointments, patientFiles, addPatientFile, updatePatientFile, deletePatientFile } = useData();
   const { t } = useLanguage();
+  const { alertConfig, showAlert, dismissAlert } = useAlert();
 
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [sortKey, setSortKey] = useState<SortKey>('dateAdded');
@@ -195,7 +197,7 @@ export default function PatientFilesScreen() {
     setFabOpen(false);
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert(t('permissionRequired'), t('cameraPermNeeded'));
+      showAlert(t('permissionRequired'), t('cameraPermNeeded'), [{ text: t('ok') }]);
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: 'images', quality: 0.8 });
@@ -212,7 +214,7 @@ export default function PatientFilesScreen() {
     setFabOpen(false);
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert(t('permissionRequired'), t('galleryPermNeeded'));
+      showAlert(t('permissionRequired'), t('galleryPermNeeded'), [{ text: t('ok') }]);
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -264,7 +266,7 @@ export default function PatientFilesScreen() {
       options.push({
         text: t('unlinkFromAppointment'),
         onPress: () => {
-          Alert.alert(t('unlinkFromAppointment'), t('removeFileFromAppointment'), [
+          showAlert(t('unlinkFromAppointment'), t('removeFileFromAppointment'), [
             { text: t('cancel'), style: 'cancel' },
             { text: t('unlink'), onPress: () => updatePatientFile({ ...file, appointmentId: undefined }) },
           ]);
@@ -276,7 +278,7 @@ export default function PatientFilesScreen() {
       text: t('delete'),
       style: 'destructive',
       onPress: () => {
-        Alert.alert(t('deleteFile'), t('fileDeletePermanent'), [
+        showAlert(t('deleteFile'), t('fileDeletePermanent'), [
           { text: t('cancel'), style: 'cancel' },
           { text: t('delete'), style: 'destructive', onPress: () => deletePatientFile(file.id) },
         ]);
@@ -284,7 +286,7 @@ export default function PatientFilesScreen() {
     });
 
     options.push({ text: t('cancel'), onPress: () => {}, style: 'cancel' });
-    Alert.alert(t('fileOptions'), file.fileName, options);
+    showAlert(t('fileOptions'), file.fileName, options);
   };
 
   const handleSaveEditNotes = async () => {
@@ -651,6 +653,8 @@ export default function PatientFilesScreen() {
           </View>
         </View>
       </Modal>
+
+      <CustomAlert {...alertConfig} onDismiss={dismissAlert} />
     </View>
   );
 }

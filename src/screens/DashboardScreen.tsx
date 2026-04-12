@@ -90,13 +90,6 @@ export default function DashboardScreen() {
           <Text style={styles.greeting}>{getGreeting()},</Text>
           <Text style={styles.doctorName}>{language === 'ar' ? 'د. ' : 'Dr. '}{doctor?.name ?? (language === 'ar' ? 'طبيب' : 'Doctor')}</Text>
         </View>
-        <TouchableOpacity
-          style={styles.settingsButton}
-          onPress={() => navigation.navigate('Settings')}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="settings-outline" size={ms(24)} color={colors.textSecondary} />
-        </TouchableOpacity>
       </View>
 
       {/* Quick Stats */}
@@ -285,16 +278,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
   },
-  settingsButton: {
-    width: wp(44),
-    height: wp(44),
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...shadow.sm,
-  },
-
   // Stats
   statsRow: {
     flexDirection: 'row',

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TouchableWithoutFeedback } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TouchableWithoutFeedback, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontSize, borderRadius, shadow } from '../utils/theme';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -30,6 +30,18 @@ function formatDisplay(hour: number, minute: number, period: 'AM' | 'PM'): strin
   return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')} ${period}`;
 }
 
+function clampHour(val: number): number {
+  if (isNaN(val) || val < 1) return 1;
+  if (val > 12) return 12;
+  return val;
+}
+
+function clampMinute(val: number): number {
+  if (isNaN(val) || val < 0) return 0;
+  if (val > 59) return 59;
+  return val;
+}
+
 export default function TimePicker({ value, onChange, label }: TimePickerProps) {
   const { t, isRTL } = useLanguage();
   const parsed = parse24h(value);
@@ -37,6 +49,13 @@ export default function TimePicker({ value, onChange, label }: TimePickerProps) 
   const [minute, setMinute] = useState(parsed.minute);
   const [period, setPeriod] = useState<'AM' | 'PM'>(parsed.period);
   const [modalVisible, setModalVisible] = useState(false);
+
+  const [editingHour, setEditingHour] = useState(false);
+  const [editingMinute, setEditingMinute] = useState(false);
+  const [hourText, setHourText] = useState('');
+  const [minuteText, setMinuteText] = useState('');
+  const hourInputRef = useRef<TextInput>(null);
+  const minuteInputRef = useRef<TextInput>(null);
 
   // Sync with external value
   useEffect(() => {
@@ -50,20 +69,46 @@ export default function TimePicker({ value, onChange, label }: TimePickerProps) 
   const decrementHour = () => setHour((h) => (h <= 1 ? 12 : h - 1));
   const incrementMinute = () => setMinute((m) => (m >= 55 ? 0 : m + 5));
   const decrementMinute = () => setMinute((m) => (m <= 0 ? 55 : m - 5));
-  const togglePeriod = () => setPeriod((p) => (p === 'AM' ? 'PM' : 'AM'));
+
+  const startEditHour = () => {
+    setHourText(hour.toString().padStart(2, '0'));
+    setEditingHour(true);
+    setTimeout(() => hourInputRef.current?.focus(), 50);
+  };
+
+  const finishEditHour = () => {
+    const val = parseInt(hourText, 10);
+    setHour(clampHour(val));
+    setEditingHour(false);
+  };
+
+  const startEditMinute = () => {
+    setMinuteText(minute.toString().padStart(2, '0'));
+    setEditingMinute(true);
+    setTimeout(() => minuteInputRef.current?.focus(), 50);
+  };
+
+  const finishEditMinute = () => {
+    const val = parseInt(minuteText, 10);
+    setMinute(clampMinute(val));
+    setEditingMinute(false);
+  };
 
   const handleConfirm = () => {
     onChange(to24h(hour, minute, period));
     setModalVisible(false);
+    setEditingHour(false);
+    setEditingMinute(false);
   };
 
   const handleCancel = () => {
-    // Reset to current value
     const p = parse24h(value);
     setHour(p.hour);
     setMinute(p.minute);
     setPeriod(p.period);
     setModalVisible(false);
+    setEditingHour(false);
+    setEditingMinute(false);
   };
 
   const displayTime = formatDisplay(parsed.hour, parsed.minute, parsed.period);
@@ -91,9 +136,23 @@ export default function TimePicker({ value, onChange, label }: TimePickerProps) 
                     <TouchableOpacity style={styles.arrowBtn} onPress={incrementHour}>
                       <Ionicons name="chevron-up" size={28} color={colors.primary} />
                     </TouchableOpacity>
-                    <View style={styles.valueBox}>
-                      <Text style={styles.valueText}>{hour.toString().padStart(2, '0')}</Text>
-                    </View>
+                    <TouchableOpacity style={styles.valueBox} onPress={startEditHour} activeOpacity={0.7}>
+                      {editingHour ? (
+                        <TextInput
+                          ref={hourInputRef}
+                          style={styles.valueInput}
+                          value={hourText}
+                          onChangeText={(t) => setHourText(t.replace(/[^0-9]/g, '').slice(0, 2))}
+                          onBlur={finishEditHour}
+                          onSubmitEditing={finishEditHour}
+                          keyboardType="number-pad"
+                          maxLength={2}
+                          selectTextOnFocus
+                        />
+                      ) : (
+                        <Text style={styles.valueText}>{hour.toString().padStart(2, '0')}</Text>
+                      )}
+                    </TouchableOpacity>
                     <TouchableOpacity style={styles.arrowBtn} onPress={decrementHour}>
                       <Ionicons name="chevron-down" size={28} color={colors.primary} />
                     </TouchableOpacity>
@@ -107,9 +166,23 @@ export default function TimePicker({ value, onChange, label }: TimePickerProps) 
                     <TouchableOpacity style={styles.arrowBtn} onPress={incrementMinute}>
                       <Ionicons name="chevron-up" size={28} color={colors.primary} />
                     </TouchableOpacity>
-                    <View style={styles.valueBox}>
-                      <Text style={styles.valueText}>{minute.toString().padStart(2, '0')}</Text>
-                    </View>
+                    <TouchableOpacity style={styles.valueBox} onPress={startEditMinute} activeOpacity={0.7}>
+                      {editingMinute ? (
+                        <TextInput
+                          ref={minuteInputRef}
+                          style={styles.valueInput}
+                          value={minuteText}
+                          onChangeText={(t) => setMinuteText(t.replace(/[^0-9]/g, '').slice(0, 2))}
+                          onBlur={finishEditMinute}
+                          onSubmitEditing={finishEditMinute}
+                          keyboardType="number-pad"
+                          maxLength={2}
+                          selectTextOnFocus
+                        />
+                      ) : (
+                        <Text style={styles.valueText}>{minute.toString().padStart(2, '0')}</Text>
+                      )}
+                    </TouchableOpacity>
                     <TouchableOpacity style={styles.arrowBtn} onPress={decrementMinute}>
                       <Ionicons name="chevron-down" size={28} color={colors.primary} />
                     </TouchableOpacity>
@@ -240,11 +313,20 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     minWidth: 72,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   valueText: {
     fontSize: fontSize.xxl,
     fontWeight: '700',
     color: colors.primary,
+  },
+  valueInput: {
+    fontSize: fontSize.xxl,
+    fontWeight: '700',
+    color: colors.primary,
+    textAlign: 'center',
+    padding: 0,
+    minWidth: 40,
   },
   separator: {
     fontSize: fontSize.xxl,

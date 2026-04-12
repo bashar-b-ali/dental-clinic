@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useData } from '../context/DataContext';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import CustomAlert, { useAlert } from '../components/CustomAlert';
 import { useLanguage } from '../i18n/LanguageContext';
 import { colors, spacing, fontSize, borderRadius } from '../utils/theme';
 import { wp } from '../utils/responsive';
@@ -38,6 +39,7 @@ export default function AddPaymentScreen() {
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const { alertConfig, showAlert, dismissAlert } = useAlert();
 
   const handleQuickAmount = (type: 'full' | 'half') => {
     if (balance <= 0) return;
@@ -48,12 +50,12 @@ export default function AddPaymentScreen() {
   const handleSave = async () => {
     const numericAmount = parseFloat(amount);
     if (!amount || isNaN(numericAmount) || numericAmount <= 0) {
-      Alert.alert(t('invalidAmount'), t('invalidAmountMsg'));
+      showAlert(t('invalidAmount'), t('invalidAmountMsg'), [{ text: t('ok') }]);
       return;
     }
 
     if (!date) {
-      Alert.alert(t('missingDate'), t('missingDateMsg'));
+      showAlert(t('missingDate'), t('missingDateMsg'), [{ text: t('ok') }]);
       return;
     }
 
@@ -69,7 +71,7 @@ export default function AddPaymentScreen() {
       });
       navigation.goBack();
     } catch (error) {
-      Alert.alert(t('error'), t('failedToSavePayment'));
+      showAlert(t('error'), t('failedToSavePayment'), [{ text: t('ok') }]);
     } finally {
       setSaving(false);
     }
@@ -200,6 +202,8 @@ export default function AddPaymentScreen() {
         size="lg"
         style={styles.saveButton}
       />
+
+      <CustomAlert {...alertConfig} onDismiss={dismissAlert} />
     </ScrollView>
   );
 }

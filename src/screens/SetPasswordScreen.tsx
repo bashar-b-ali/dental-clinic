@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Alert,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
@@ -12,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import CustomAlert, { useAlert } from '../components/CustomAlert';
 import { colors, spacing, fontSize, borderRadius, shadow } from '../utils/theme';
 import { wp, ms } from '../utils/responsive';
 import { hashPassword, savePasswordHash, verifyPassword } from '../utils/auth';
@@ -37,6 +37,7 @@ export default function SetPasswordScreen({ isChangeMode, onComplete, onCancel }
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const { alertConfig, showAlert, dismissAlert } = useAlert();
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -79,13 +80,13 @@ export default function SetPasswordScreen({ isChangeMode, onComplete, onCancel }
       const hash = await hashPassword(newPassword);
       await savePasswordHash(hash);
 
-      Alert.alert(
+      showAlert(
         t('done'),
         isChangeMode ? t('passwordChanged') : t('passwordSet'),
         [{ text: t('ok'), onPress: onComplete }],
       );
     } catch {
-      Alert.alert(t('error'), t('failedToSave'));
+      showAlert(t('error'), t('failedToSave'), [{ text: t('ok') }]);
     } finally {
       setLoading(false);
     }
@@ -144,7 +145,7 @@ export default function SetPasswordScreen({ isChangeMode, onComplete, onCancel }
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
         contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.md }]}
@@ -235,6 +236,8 @@ export default function SetPasswordScreen({ isChangeMode, onComplete, onCancel }
             </Text>
           </TouchableOpacity>
         </View>
+
+        <CustomAlert {...alertConfig} onDismiss={dismissAlert} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

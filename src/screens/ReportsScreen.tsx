@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../context/DataContext';
 import { useLanguage } from '../i18n/LanguageContext';
 import Card from '../components/Card';
+import EmptyState from '../components/EmptyState';
 import { colors, spacing, fontSize, borderRadius, shadow } from '../utils/theme';
 import { wp, ms } from '../utils/responsive';
 import { formatCurrency, getToday, getIncomeForPeriod, getDayRange, getWeekRange, getMonthRange, getAppointmentTotal, getPatientName } from '../utils/helpers';
@@ -14,7 +15,7 @@ const screenWidth = Dimensions.get('window').width;
 
 export default function ReportsScreen() {
   const { appointments, payments, patients } = useData();
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
   const [period, setPeriod] = useState<Period>('month');
   const [referenceDate, setReferenceDate] = useState(getToday());
 
@@ -150,14 +151,22 @@ export default function ReportsScreen() {
       {/* Date Navigation */}
       <View style={styles.dateNav}>
         <TouchableOpacity onPress={() => navigateDate(-1)} style={styles.arrowBtn}>
-          <Ionicons name="chevron-back" size={22} color={colors.primary} />
+          <Ionicons name={isRTL ? 'chevron-forward' : 'chevron-back'} size={22} color={colors.primary} />
         </TouchableOpacity>
         <Text style={styles.dateLabel}>{formatPeriodLabel()}</Text>
         <TouchableOpacity onPress={() => navigateDate(1)} style={styles.arrowBtn}>
-          <Ionicons name="chevron-forward" size={22} color={colors.primary} />
+          <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={22} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
+      {appointments.length === 0 && payments.length === 0 ? (
+        <EmptyState
+          icon="stats-chart-outline"
+          title={t('noReportsData')}
+          message={t('noReportsDataMsg')}
+        />
+      ) : (
+      <>
       {/* Summary Cards */}
       <View style={styles.summaryGrid}>
         <View style={styles.summaryHalf}>
@@ -382,6 +391,8 @@ export default function ReportsScreen() {
       </Card>
 
       <View style={{ height: spacing.xl }} />
+      </>
+      )}
     </ScrollView>
   );
 }

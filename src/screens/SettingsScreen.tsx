@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -19,6 +19,7 @@ import { wp } from '../utils/responsive';
 import * as storage from '../utils/storage';
 import { clearPasswordHash } from '../utils/auth';
 import { usePasswordAction } from '../navigation/AppNavigator';
+import * as notifications from '../utils/notifications';
 import * as XLSX from 'xlsx';
 
 const APP_VERSION = '1.0.0';
@@ -35,12 +36,38 @@ export default function SettingsScreen() {
   const [editClinic, setEditClinic] = useState(doctor?.clinicName ?? '');
   const [editPhone, setEditPhone] = useState(doctor?.phone ?? '');
   const [exporting, setExporting] = useState(false);
+  const [notificationsOn, setNotificationsOn] = useState(false);
   const { alertConfig, showAlert, dismissAlert } = useAlert();
+
+  useEffect(() => {
+    notifications.getNotificationsEnabled().then(setNotificationsOn);
+  }, []);
+
+  const handleToggleNotifications = useCallback(async (value: boolean) => {
+    if (value) {
+      const granted = await notifications.requestPermissions();
+      if (!granted) {
+        showAlert(t('notificationPermDenied'), t('notificationPermDeniedMsg'), [{ text: t('ok') }]);
+        return;
+      }
+      await notifications.setNotificationsEnabled(true);
+      setNotificationsOn(true);
+      // Schedule reminders for all upcoming appointments
+      await notifications.rescheduleAllReminders(
+        appointments,
+        (patientId) => getPatientName(patientId, patients),
+        language as 'en' | 'ar',
+      );
+    } else {
+      await notifications.setNotificationsEnabled(false);
+      setNotificationsOn(false);
+    }
+  }, [appointments, patients, language, showAlert, t]);
 
   const handleSaveProfile = async () => {
     if (!doctor) return;
     if (!editName.trim()) {
-      Alert.alert(t('error'), t('pleaseSelectPatient'));
+      showAlert(t('error'), t('pleaseSelectPatient'), [{ text: t('ok') }]);
       return;
     }
     await setDoctor({
@@ -69,7 +96,7 @@ export default function SettingsScreen() {
       await FileSystem.writeAsStringAsync(filePath, json, { encoding: FileSystem.EncodingType.UTF8 });
       await Sharing.shareAsync(filePath);
     } catch (error: any) {
-      Alert.alert(t('error'), error.message || 'An error occurred while exporting data.');
+      showAlert(t('error'), error.message || t('exportErrorMsg'), [{ text: t('ok') }]);
     } finally {
       setExporting(false);
     }
@@ -122,7 +149,7 @@ export default function SettingsScreen() {
       await FileSystem.writeAsStringAsync(filePath, base64, { encoding: FileSystem.EncodingType.Base64 });
       await Sharing.shareAsync(filePath);
     } catch (error: any) {
-      Alert.alert(t('error'), error.message || 'An error occurred while exporting data.');
+      showAlert(t('error'), error.message || t('exportErrorMsg'), [{ text: t('ok') }]);
     } finally {
       setExporting(false);
     }
@@ -138,41 +165,40 @@ export default function SettingsScreen() {
       const data = JSON.parse(content);
 
       if (!data.patients || !data.appointments || !data.payments) {
-        Alert.alert(t('error'), 'The selected file does not contain valid dental app data.');
+        showAlert(t('error'), t('invalidMergeFile'), [{ text: t('ok') }]);
         return;
       }
 
       const fileCount = data.patientFiles?.length ?? 0;
       const attachmentCount = data.fileAttachments?.length ?? 0;
 
-      Alert.alert(
-        `${t('importData')} (Smart Merge)`,
-        `This will merge new records into your existing data.\nExisting records will NOT be overwritten.\n\nIncoming:\n- ${data.patients.length} patients\n- ${data.appointments.length} appointments\n- ${data.payments.length} payments\n- ${fileCount} files (${attachmentCount} with attachments)`,
+      showAlert(
+        `${t('importData')} (${t('smartMerge')})`,
+        `${t('mergeDescription')}\n\n${t('mergeIncoming')}\n- ${t('mergePatients').replace('{count}', data.patients.length)}\n- ${t('mergeAppointments').replace('{count}', data.appointments.length)}\n- ${t('mergePayments').replace('{count}', data.payments.length)}\n- ${t('mergeFiles').replace('{count}', String(fileCount)).replace('{attachments}', String(attachmentCount))}`,
         [
           { text: t('cancel'), style: 'cancel' },
           {
-            text: 'Merge',
+            text: t('mergeBtn'),
             onPress: async () => {
               const stats = await mergeData(data);
-              Alert.alert(
+              showAlert(
                 t('done'),
-                `Added:\n- ${stats.patientsAdded} new patients\n- ${stats.appointmentsAdded} new appointments\n- ${stats.paymentsAdded} new payments\n- ${stats.filesAdded} new files\n\nExisting records were kept unchanged.`
+                `${t('mergeAdded')}\n- ${t('mergeNewPatients').replace('{count}', String(stats.patientsAdded))}\n- ${t('mergeNewAppointments').replace('{count}', String(stats.appointmentsAdded))}\n- ${t('mergeNewPayments').replace('{count}', String(stats.paymentsAdded))}\n- ${t('mergeNewFiles').replace('{count}', String(stats.filesAdded))}\n\n${t('recordsKept')}`,
+                [{ text: t('ok') }]
               );
             },
           },
         ]
       );
     } catch (error: any) {
-      Alert.alert(t('error'), error.message || 'An error occurred while importing data.');
+      showAlert(t('error'), error.message || t('importErrorMsg'), [{ text: t('ok') }]);
     }
   };
 
   const clearData = () => {
     showAlert(
       t('clearAllData'),
-      language === 'ar'
-        ? 'هل أنت متأكد من حذف جميع البيانات؟ لا يمكن التراجع عن هذا.'
-        : 'Are you sure you want to delete all data? This cannot be undone.',
+      t('clearConfirmMsg'),
       [
         { text: t('cancel'), style: 'cancel' },
         {
@@ -180,10 +206,8 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: () => {
             showAlert(
-              language === 'ar' ? 'تأكيد نهائي' : 'Final Confirmation',
-              language === 'ar'
-                ? 'سيتم حذف جميع المرضى والمواعيد والدفعات والإعدادات نهائياً. هل أنت متأكد تماماً؟'
-                : 'This will permanently delete ALL patients, appointments, payments, and settings. Are you absolutely sure?',
+              t('finalConfirmation'),
+              t('clearFinalMsg'),
               [
                 { text: t('cancel'), style: 'cancel' },
                 {
@@ -193,7 +217,7 @@ export default function SettingsScreen() {
                     await storage.clearAllData();
                     await clearPasswordHash();
                     await refreshData();
-                    showAlert(t('done'), language === 'ar' ? 'تم مسح جميع البيانات.' : 'All data has been cleared.', [
+                    showAlert(t('done'), t('clearSuccess'), [
                       { text: t('ok') },
                     ]);
                   },
@@ -207,7 +231,18 @@ export default function SettingsScreen() {
   };
 
   const toggleLanguage = () => {
-    setLanguage(language === 'en' ? 'ar' : 'en');
+    const newLang = language === 'en' ? 'ar' : 'en';
+    const title = language === 'ar' ? 'Change Language' : 'تغيير اللغة';
+    const message = language === 'ar'
+      ? 'Switch to English?'
+      : 'هل تريد التبديل إلى العربية؟';
+    showAlert(title, message, [
+      { text: t('cancel'), style: 'cancel' },
+      {
+        text: language === 'ar' ? 'English' : 'العربية',
+        onPress: () => setLanguage(newLang),
+      },
+    ], { icon: 'language' });
   };
 
   return (
@@ -225,19 +260,38 @@ export default function SettingsScreen() {
           onPress={toggleLanguage}
           activeOpacity={0.7}
         >
-          <View style={styles.languageOptions}>
-            <View style={[styles.langOption, language === 'en' && styles.langOptionActive]}>
-              <Text style={[styles.langOptionText, language === 'en' && styles.langOptionTextActive]}>
-                English
-              </Text>
-            </View>
-            <View style={[styles.langOption, language === 'ar' && styles.langOptionActive]}>
-              <Text style={[styles.langOptionText, language === 'ar' && styles.langOptionTextActive]}>
-                العربية
-              </Text>
-            </View>
+          <View style={styles.languageRow}>
+            <Text style={styles.languageCurrent}>
+              {language === 'en' ? 'English' : 'العربية'}
+            </Text>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </View>
         </TouchableOpacity>
+      </Card>
+
+      {/* Notifications */}
+      <Card style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionHeaderLeft}>
+            <Ionicons name="notifications-outline" size={22} color={colors.primary} />
+            <Text style={styles.sectionTitle}>{t('notifications')}</Text>
+          </View>
+        </View>
+        <View style={styles.notificationRow}>
+          <View style={styles.notificationInfo}>
+            <Text style={styles.notificationTitle}>{t('appointmentReminders')}</Text>
+            <Text style={styles.notificationDesc}>{t('appointmentRemindersDesc')}</Text>
+          </View>
+          <Switch
+            value={notificationsOn}
+            onValueChange={handleToggleNotifications}
+            trackColor={{ false: colors.border, true: colors.primary + '80' }}
+            thumbColor={notificationsOn ? colors.primary : colors.textMuted}
+          />
+        </View>
+        <Text style={styles.notificationStatus}>
+          {notificationsOn ? t('notificationsEnabled') : t('notificationsDisabled')}
+        </Text>
       </Card>
 
       {/* Security */}
@@ -487,33 +541,50 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.xs,
   },
+  // Notifications
+  notificationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: -spacing.xs,
+  },
+  notificationInfo: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  notificationTitle: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  notificationDesc: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  notificationStatus: {
+    fontSize: fontSize.xs,
+    fontWeight: '500',
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+  },
   // Language toggle
   languageToggle: {
     marginTop: -spacing.xs,
   },
-  languageOptions: {
+  languageRow: {
     flexDirection: 'row',
-    backgroundColor: colors.borderLight,
-    borderRadius: borderRadius.full,
-    padding: wp(3),
-  },
-  langOption: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
     alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.borderLight,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
   },
-  langOptionActive: {
-    backgroundColor: colors.primary,
-    ...shadow.sm,
-  },
-  langOptionText: {
+  languageCurrent: {
     fontSize: fontSize.md,
     fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  langOptionTextActive: {
-    color: colors.textOnPrimary,
+    color: colors.text,
   },
   buttonGroup: {
     gap: spacing.sm,

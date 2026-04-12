@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Doctor, Patient, Appointment, Payment, PatientFile, ExportData, TreatmentPlan } from '../types';
 import * as storage from '../utils/storage';
-import { generateId } from '../utils/helpers';
+import { generateId, getPatientName } from '../utils/helpers';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { scheduleAppointmentReminder, cancelAppointmentReminder, getNotificationsEnabled } from '../utils/notifications';
 
 interface DataContextType {
   doctor: Doctor | null;
@@ -106,11 +108,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setPatientFiles(updatedFiles);
   };
 
+  const getLang = async (): Promise<'en' | 'ar'> => {
+    const stored = await AsyncStorage.getItem('@mobo_language');
+    return stored === 'ar' ? 'ar' : 'en';
+  };
+
   const addAppointment = async (data: Omit<Appointment, 'id' | 'createdAt'>) => {
     const apt: Appointment = { ...data, id: generateId(), createdAt: new Date().toISOString() };
     const updated = [...appointments, apt];
     await storage.saveAppointments(updated);
     setAppointments(updated);
+    // Schedule notification
+    const lang = await getLang();
+    scheduleAppointmentReminder(apt, getPatientName(apt.patientId, patients), lang);
     return apt;
   };
 
@@ -118,12 +128,20 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const updated = appointments.map((a) => (a.id === apt.id ? apt : a));
     await storage.saveAppointments(updated);
     setAppointments(updated);
+    // Reschedule notification
+    const lang = await getLang();
+    if (apt.status === 'cancelled' || apt.status === 'completed') {
+      cancelAppointmentReminder(apt.id);
+    } else {
+      scheduleAppointmentReminder(apt, getPatientName(apt.patientId, patients), lang);
+    }
   };
 
   const deleteAppointment = async (id: string) => {
     const updated = appointments.filter((a) => a.id !== id);
     await storage.saveAppointments(updated);
     setAppointments(updated);
+    cancelAppointmentReminder(id);
   };
 
   const addPayment = async (data: Omit<Payment, 'id'>) => {

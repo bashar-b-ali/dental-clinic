@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useData } from '../context/DataContext';
 import Input from '../components/Input';
 import Button from '../components/Button';
+import CustomAlert, { useAlert } from '../components/CustomAlert';
 import { colors, spacing, fontSize, borderRadius } from '../utils/theme';
 import { wp } from '../utils/responsive';
 import { Patient } from '../types';
@@ -26,6 +27,8 @@ export default function AddPatientScreen() {
   const [medicalNotes, setMedicalNotes] = useState('');
   const [nameError, setNameError] = useState('');
   const [saving, setSaving] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const { alertConfig, showAlert, dismissAlert } = useAlert();
 
   useEffect(() => {
     if (existingPatient) {
@@ -72,7 +75,7 @@ export default function AddPatientScreen() {
       }
       navigation.goBack();
     } catch {
-      Alert.alert(t('error'), t('failedToSavePatient'));
+      showAlert(t('error'), t('failedToSavePatient'), [{ text: t('ok') }]);
     } finally {
       setSaving(false);
     }
@@ -81,9 +84,10 @@ export default function AddPatientScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
+        ref={scrollViewRef}
         style={styles.flex}
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
@@ -162,6 +166,7 @@ export default function AddPatientScreen() {
           numberOfLines={4}
           style={styles.multilineInput}
           textAlignVertical="top"
+          onFocus={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 300)}
         />
 
         <View style={styles.actions}>
@@ -179,6 +184,8 @@ export default function AddPatientScreen() {
             size="lg"
           />
         </View>
+
+        <CustomAlert {...alertConfig} onDismiss={dismissAlert} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -191,7 +198,7 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: spacing.lg,
-    paddingBottom: spacing.xl + spacing.lg,
+    paddingBottom: 120,
   },
   header: {
     fontSize: fontSize.xxl,
