@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   header: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.lg,
     paddingBottom: spacing.sm,
   },
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   searchContainer: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
   },
   searchInputWrapper: {
@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   listContent: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingBottom: wp(100),
   },
   patientCard: {

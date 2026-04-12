@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Modal, FlatList, TextInput, Keyboard, Animated } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Modal, FlatList, TextInput, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useData } from '../context/DataContext';
@@ -14,45 +14,6 @@ import CustomAlert, { useAlert } from '../components/CustomAlert';
 import { colors, spacing, fontSize, borderRadius } from '../utils/theme';
 import { Appointment, ToothWork, MaterialUsed, ExpenseItem } from '../types';
 import { getToday, DENTAL_PROCEDURES, COMMON_MATERIALS, formatCurrency, translateProcedure, translateMaterial, getPatientName } from '../utils/helpers';
-
-// Bottom sheet wrapper that shifts up when keyboard opens
-function BottomSheetKeyboardAware({ children }: { children: React.ReactNode }) {
-  const translateY = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-    const showSub = Keyboard.addListener(showEvent, (e) => {
-      Animated.timing(translateY, {
-        toValue: -e.endCoordinates.height,
-        duration: Platform.OS === 'ios' ? e.duration || 250 : 200,
-        useNativeDriver: true,
-      }).start();
-    });
-
-    const hideSub = Keyboard.addListener(hideEvent, () => {
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    });
-
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, [translateY]);
-
-  return (
-    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-      <Animated.View style={{ transform: [{ translateY }] }}>
-        {children}
-      </Animated.View>
-    </View>
-  );
-}
 
 function getCurrentTime(): string {
   const now = new Date();
@@ -714,11 +675,14 @@ export default function AddAppointmentScreen() {
 
       {/* ---- Patient Selection Modal ---- */}
       <Modal visible={patientModalVisible} animationType="slide" transparent>
-        <BottomSheetKeyboardAware>
+        <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('selectPatientTitle')}</Text>
-              <TouchableOpacity onPress={() => setPatientModalVisible(false)}>
+              <TouchableOpacity onPress={() => {
+                Keyboard.dismiss();
+                setPatientModalVisible(false);
+              }}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
@@ -731,6 +695,8 @@ export default function AddAppointmentScreen() {
             <FlatList
               data={filteredPatients}
               keyExtractor={(item) => item.id}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[
@@ -738,6 +704,7 @@ export default function AddAppointmentScreen() {
                     item.id === patientId && styles.patientOptionSelected,
                   ]}
                   onPress={() => {
+                    Keyboard.dismiss();
                     setPatientId(item.id);
                     setPatientModalVisible(false);
                     setPatientSearch('');
@@ -772,12 +739,12 @@ export default function AddAppointmentScreen() {
               style={styles.modalList}
             />
           </View>
-        </BottomSheetKeyboardAware>
+        </View>
       </Modal>
 
       {/* ---- Procedure Picker Modal ---- */}
       <Modal visible={procedureModalVisible} animationType="fade" transparent>
-        <BottomSheetKeyboardAware>
+        <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('selectProcedureTitle')}</Text>
@@ -790,6 +757,7 @@ export default function AddAppointmentScreen() {
                 <FlatList
                   data={DENTAL_PROCEDURES}
                   keyExtractor={(item) => item}
+                  keyboardShouldPersistTaps="handled"
                   renderItem={({ item }) => {
                     const isSelected =
                       procedureModalToothIndex >= 0 &&
@@ -872,12 +840,12 @@ export default function AddAppointmentScreen() {
               </View>
             )}
           </View>
-        </BottomSheetKeyboardAware>
+        </View>
       </Modal>
 
       {/* ---- Material Picker Modal ---- */}
       <Modal visible={materialModalVisible} animationType="fade" transparent>
-        <BottomSheetKeyboardAware>
+        <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('selectMaterialTitle')}</Text>
@@ -890,6 +858,7 @@ export default function AddAppointmentScreen() {
                 <FlatList
                   data={COMMON_MATERIALS}
                   keyExtractor={(item) => item}
+                  keyboardShouldPersistTaps="handled"
                   renderItem={({ item }) => {
                     const isSelected =
                       materialModalIndex >= 0 &&
@@ -972,7 +941,7 @@ export default function AddAppointmentScreen() {
               </View>
             )}
           </View>
-        </BottomSheetKeyboardAware>
+        </View>
       </Modal>
 
       {/* ---- Expense Category Picker Modal ---- */}
@@ -1025,7 +994,7 @@ export default function AddAppointmentScreen() {
 
       {/* ---- Treatment Plan Modal ---- */}
       <Modal visible={treatmentModalVisible} animationType="fade" transparent>
-        <BottomSheetKeyboardAware>
+        <View style={styles.modalOverlay}>
           <View style={styles.modalContainerSmall}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('linkToTreatment')}</Text>
@@ -1115,7 +1084,7 @@ export default function AddAppointmentScreen() {
               </TouchableOpacity>
             )}
           </View>
-        </BottomSheetKeyboardAware>
+        </View>
       </Modal>
 
       {/* Custom Alert */}

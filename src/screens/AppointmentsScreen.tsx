@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   header: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.lg,
     paddingBottom: spacing.sm,
   },
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   filterRow: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     marginBottom: spacing.sm,
   },
   pillGroup: {
@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
     color: colors.textOnPrimary,
   },
   calendarToggleRow: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     marginBottom: spacing.sm,
   },
   calendarToggleBtn: {
@@ -457,11 +457,11 @@ const styles = StyleSheet.create({
     color: colors.textOnPrimary,
   },
   calendarContainer: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     marginBottom: spacing.sm,
   },
   searchContainer: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
   },
   searchInputWrapper: {
@@ -478,7 +478,7 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   listContent: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingBottom: wp(100),
   },
   sectionHeader: {
