@@ -45,7 +45,7 @@ function getFileIcon(fileType: string): keyof typeof Ionicons.glyphMap {
   }
 }
 
-// Zoomable + pannable image component
+// Samsung-style zoomable + pannable image with boundary clamping
 function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
   const pinchRef = useRef<PinchGestureHandler>(null);
   const panRef = useRef<PanGestureHandler>(null);
@@ -64,11 +64,21 @@ function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
 
   const lastTap = useRef(0);
 
+  const clampOffset = (scale: number) => {
+    // How far the image can move before showing blank space
+    const maxX = (SCREEN_WIDTH * (scale - 1)) / 2;
+    const maxY = (SCREEN_HEIGHT * 0.85 * (scale - 1)) / 2;
+    lastOffsetX.current = Math.min(maxX, Math.max(-maxX, lastOffsetX.current));
+    lastOffsetY.current = Math.min(maxY, Math.max(-maxY, lastOffsetY.current));
+  };
+
   const resetPosition = () => {
     lastOffsetX.current = 0;
     lastOffsetY.current = 0;
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
-    Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
+    translateX.flattenOffset();
+    translateY.flattenOffset();
+    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+    Animated.spring(translateY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
   };
 
   // Pinch
@@ -89,6 +99,15 @@ function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
         baseScaleRef.current = 1;
         Animated.spring(savedScale, { toValue: 1, useNativeDriver: true }).start();
         resetPosition();
+      } else {
+        // Clamp position after zoom change
+        clampOffset(clamped);
+        translateX.flattenOffset();
+        translateX.setValue(lastOffsetX.current);
+        translateX.setOffset(0);
+        translateY.flattenOffset();
+        translateY.setValue(lastOffsetY.current);
+        translateY.setOffset(0);
       }
     }
   };
@@ -102,11 +121,11 @@ function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
   const onPanStateChange = (event: PanGestureHandlerStateChangeEvent) => {
     if (event.nativeEvent.oldState === GestureState.ACTIVE) {
       if (baseScaleRef.current <= 1.05) {
-        // Not zoomed - snap back
         resetPosition();
       } else {
         lastOffsetX.current += event.nativeEvent.translationX;
         lastOffsetY.current += event.nativeEvent.translationY;
+        clampOffset(baseScaleRef.current);
         translateX.setOffset(lastOffsetX.current);
         translateX.setValue(0);
         translateY.setOffset(lastOffsetY.current);
@@ -118,7 +137,6 @@ function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
   const handleTap = () => {
     const now = Date.now();
     if (now - lastTap.current < 300) {
-      // Double tap - toggle zoom
       pinchScale.setValue(1);
       if (baseScaleRef.current > 1.05) {
         baseScaleRef.current = 1;
@@ -297,6 +315,8 @@ export default function FileViewerScreen() {
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
+          bounces={false}
+          overScrollMode="never"
           initialScrollIndex={initialIndex >= 0 ? initialIndex : 0}
           getItemLayout={(_, index) => ({
             length: SCREEN_WIDTH,

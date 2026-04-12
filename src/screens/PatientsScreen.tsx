@@ -148,6 +148,7 @@ export default function PatientsScreen() {
           renderItem={renderPatientCard}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         />
       )}
 

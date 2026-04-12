@@ -313,40 +313,40 @@ export default function AppointmentsScreen() {
     </>
   );
 
+  const ListEmpty = () => (
+    sections.length === 0 ? (
+      search.length > 0 ? (
+        <EmptyState
+          icon="search-outline"
+          title={t('noResults')}
+          message={`${t('noPatientFound')} "${search}"`}
+        />
+      ) : (
+        <EmptyState
+          icon="calendar-outline"
+          title={emptyConfig[activeFilter].title}
+          message={emptyConfig[activeFilter].message}
+          actionLabel={t('addAppointment')}
+          onAction={() => navigation.navigate('AddAppointment')}
+        />
+      )
+    ) : null
+  );
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {sections.length === 0 ? (
-        <>
-          <ListHeader />
-          {search.length > 0 ? (
-            <EmptyState
-              icon="search-outline"
-              title={t('noResults')}
-              message={`${t('noPatientFound')} "${search}"`}
-            />
-          ) : (
-            <EmptyState
-              icon="calendar-outline"
-              title={emptyConfig[activeFilter].title}
-              message={emptyConfig[activeFilter].message}
-              actionLabel={t('addAppointment')}
-              onAction={() => navigation.navigate('AddAppointment')}
-            />
-          )}
-        </>
-      ) : (
-        <SectionList
-          sections={sections}
-          keyExtractor={(item) => item.id}
-          renderItem={renderAppointmentCard}
-          renderSectionHeader={renderSectionHeader}
-          ListHeaderComponent={ListHeader}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          stickySectionHeadersEnabled={false}
-          keyboardShouldPersistTaps="handled"
-        />
-      )}
+      <SectionList
+        sections={sections}
+        keyExtractor={(item) => item.id}
+        renderItem={renderAppointmentCard}
+        renderSectionHeader={renderSectionHeader}
+        ListHeaderComponent={ListHeader}
+        ListEmptyComponent={ListEmpty}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        stickySectionHeadersEnabled={false}
+        keyboardShouldPersistTaps="handled"
+      />
 
       <TouchableOpacity
         style={styles.fab}

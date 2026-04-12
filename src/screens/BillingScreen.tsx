@@ -260,6 +260,7 @@ export default function BillingScreen() {
           renderItem={renderPatientCard}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         />
       )}
     </View>

@@ -27,6 +27,10 @@ function isToday(dateStr: string): boolean {
   return dateStr === new Date().toISOString().split('T')[0];
 }
 
+function toDateStr(d: Date): string {
+  return d.toISOString().split('T')[0];
+}
+
 function getMonthDays(dateStr: string): string[][] {
   const d = new Date(dateStr + 'T12:00:00');
   const year = d.getFullYear();
@@ -41,29 +45,38 @@ function getMonthDays(dateStr: string): string[][] {
   const weeks: string[][] = [];
   let currentWeek: string[] = [];
 
-  // Fill leading blanks
-  for (let i = 0; i < startDayOfWeek; i++) {
-    currentWeek.push('');
+  // Fill leading days from previous month
+  const prevMonthLast = new Date(year, month, 0); // last day of prev month
+  for (let i = startDayOfWeek - 1; i >= 0; i--) {
+    const day = new Date(prevMonthLast);
+    day.setDate(prevMonthLast.getDate() - i);
+    currentWeek.push(toDateStr(day));
   }
 
   for (let day = 1; day <= totalDays; day++) {
     const dateObj = new Date(year, month, day);
-    currentWeek.push(dateObj.toISOString().split('T')[0]);
+    currentWeek.push(toDateStr(dateObj));
     if (currentWeek.length === 7) {
       weeks.push(currentWeek);
       currentWeek = [];
     }
   }
 
-  // Fill trailing blanks
+  // Fill trailing days from next month
   if (currentWeek.length > 0) {
+    let nextDay = 1;
     while (currentWeek.length < 7) {
-      currentWeek.push('');
+      const dateObj = new Date(year, month + 1, nextDay++);
+      currentWeek.push(toDateStr(dateObj));
     }
     weeks.push(currentWeek);
   }
 
   return weeks;
+}
+
+function getMonth(dateStr: string): number {
+  return new Date(dateStr + 'T12:00:00').getMonth();
 }
 
 export default function DatePicker({ selectedDate, onSelectDate, appointmentDates }: DatePickerProps) {
@@ -123,11 +136,10 @@ export default function DatePicker({ selectedDate, onSelectDate, appointmentDate
       {weeks.map((week, weekIndex) => (
         <View key={weekIndex} style={styles.weekRow}>
           {week.map((dateStr, dayIndex) => {
-            if (!dateStr) {
-              return <View key={`empty-${dayIndex}`} style={styles.dayCell} />;
-            }
-
             const dayNum = new Date(dateStr + 'T12:00:00').getDate();
+            const currentMonth = getMonth(viewDate);
+            const dateMonth = getMonth(dateStr);
+            const isOutsideMonth = dateMonth !== currentMonth;
             const isSelected = dateStr === selectedDate;
             const isTodayDate = isToday(dateStr);
             const hasAppointment = appointmentDates?.has(dateStr);
@@ -146,13 +158,14 @@ export default function DatePicker({ selectedDate, onSelectDate, appointmentDate
                 <Text
                   style={[
                     styles.dayNumber,
+                    isOutsideMonth && styles.dayNumberOutside,
                     isSelected && styles.dayNumberSelected,
                     isTodayDate && !isSelected && styles.dayNumberToday,
                   ]}
                 >
                   {dayNum}
                 </Text>
-                {hasAppointment && (
+                {hasAppointment && !isOutsideMonth && (
                   <View
                     style={[
                       styles.appointmentDot,
@@ -249,6 +262,9 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: '600',
     color: colors.text,
+  },
+  dayNumberOutside: {
+    color: colors.border,
   },
   dayNumberSelected: {
     color: colors.textOnPrimary,

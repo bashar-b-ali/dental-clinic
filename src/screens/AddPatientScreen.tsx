@@ -84,7 +84,7 @@ export default function AddPatientScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
         ref={scrollViewRef}
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: spacing.lg,
-    paddingBottom: 120,
+    paddingBottom: spacing.xl * 2,
   },
   header: {
     fontSize: fontSize.xxl,

@@ -329,9 +329,9 @@ export default function AddAppointmentScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {/* Patient Selection */}
         <Card>
           {renderSectionHeader('sectionPatient', 'person-outline')}
@@ -1134,7 +1134,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.md,
-    paddingBottom: 120,
+    paddingBottom: spacing.xl * 2,
   },
   sectionHeader: {
     flexDirection: 'row',
