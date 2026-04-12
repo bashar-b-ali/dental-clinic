@@ -37,7 +37,8 @@
           "photosPermission": "MoBo Dental needs access to your photos to attach patient files.",
           "cameraPermission": "MoBo Dental needs access to your camera to take patient photos."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "eas": {
