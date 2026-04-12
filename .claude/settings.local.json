@@ -16,7 +16,10 @@
       "Bash(grep:*)",
       "Bash(ls -la /d/Projects/git/mobo/.git*)",
       "Bash(node scripts/fix-adaptive-icon.js)",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(xargs cat:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)"
     ]
   }
 }
