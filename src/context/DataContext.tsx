@@ -23,6 +23,7 @@ interface DataContextType {
   updateAppointment: (apt: Appointment) => Promise<void>;
   deleteAppointment: (id: string) => Promise<void>;
   addPayment: (payment: Omit<Payment, 'id'>) => Promise<Payment>;
+  updatePayment: (payment: Payment) => Promise<void>;
   deletePayment: (id: string) => Promise<void>;
   addPatientFile: (file: Omit<PatientFile, 'id' | 'createdAt'>) => Promise<PatientFile>;
   updatePatientFile: (file: PatientFile) => Promise<void>;
@@ -152,6 +153,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     return payment;
   };
 
+  const updatePayment = async (payment: Payment) => {
+    const updated = payments.map((p) => (p.id === payment.id ? payment : p));
+    await storage.savePayments(updated);
+    setPaymentsState(updated);
+  };
+
   const deletePayment = async (id: string) => {
     const updated = payments.filter((p) => p.id !== id);
     await storage.savePayments(updated);
@@ -241,6 +248,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         updateAppointment,
         deleteAppointment,
         addPayment,
+        updatePayment,
         deletePayment,
         addPatientFile,
         updatePatientFile,

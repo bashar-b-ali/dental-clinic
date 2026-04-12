@@ -26,8 +26,9 @@ export default function AddPaymentScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { t } = useLanguage();
-  const { patientId, appointmentId } = route.params;
-  const { patients, appointments, payments, addPayment } = useData();
+  const { patientId, appointmentId, editPayment } = route.params;
+  const isEditing = !!editPayment;
+  const { patients, appointments, payments, addPayment, updatePayment, deletePayment } = useData();
 
   const patient = patients.find((p) => p.id === patientId);
   const { totalCharged, totalPaid, balance } = getPatientBalance(
@@ -36,9 +37,55 @@ export default function AddPaymentScreen() {
     payments
   );
 
-  const patientPayments = payments
-    .filter((p) => p.patientId === patientId)
-    .sort((a, b) => b.date.localeCompare(a.date));
+  // Combine Payment records + appointment amountPaid into unified history
+  const allPaymentItems = React.useMemo(() => {
+    const items: Array<{
+      id: string;
+      type: 'payment' | 'appointment';
+      amount: number;
+      date: string;
+      method?: string;
+      notes?: string;
+      appointmentId?: string;
+      appointmentTime?: string;
+      paymentRecord?: typeof payments[0];
+    }> = [];
+
+    // Payment records
+    payments
+      .filter((p) => p.patientId === patientId)
+      .forEach((p) => {
+        const apt = p.appointmentId ? appointments.find((a) => a.id === p.appointmentId) : null;
+        items.push({
+          id: p.id,
+          type: 'payment',
+          amount: p.amount,
+          date: p.date,
+          method: p.method,
+          notes: p.notes,
+          appointmentId: p.appointmentId,
+          appointmentTime: apt?.time,
+          paymentRecord: p,
+        });
+      });
+
+    // Appointment amountPaid entries (not already in payments)
+    appointments
+      .filter((a) => a.patientId === patientId && a.amountPaid > 0 && a.status !== 'cancelled')
+      .forEach((a) => {
+        items.push({
+          id: `apt-${a.id}`,
+          type: 'appointment',
+          amount: a.amountPaid,
+          date: a.date,
+          notes: a.chiefComplaint,
+          appointmentId: a.id,
+          appointmentTime: a.time,
+        });
+      });
+
+    return items.sort((a, b) => b.date.localeCompare(a.date));
+  }, [payments, appointments, patientId]);
 
   const methodLabels: Record<string, string> = {
     cash: t('cash'),
@@ -47,10 +94,10 @@ export default function AddPaymentScreen() {
     other: t('catOther'),
   };
 
-  const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(getToday());
-  const [method, setMethod] = useState<PaymentMethod>('cash');
-  const [notes, setNotes] = useState('');
+  const [amount, setAmount] = useState(isEditing ? editPayment.amount.toString() : '');
+  const [date, setDate] = useState(isEditing ? editPayment.date : getToday());
+  const [method, setMethod] = useState<PaymentMethod>(isEditing ? editPayment.method : 'cash');
+  const [notes, setNotes] = useState(isEditing ? (editPayment.notes ?? '') : '');
   const [saving, setSaving] = useState(false);
   const { alertConfig, showAlert, dismissAlert } = useAlert();
 
@@ -74,20 +121,41 @@ export default function AddPaymentScreen() {
 
     setSaving(true);
     try {
-      await addPayment({
-        patientId,
-        appointmentId: appointmentId || undefined,
-        amount: numericAmount,
-        date,
-        method,
-        notes: notes.trim() || undefined,
-      });
+      if (isEditing) {
+        await updatePayment({
+          ...editPayment,
+          amount: numericAmount,
+          date,
+          method,
+          notes: notes.trim() || undefined,
+        });
+      } else {
+        await addPayment({
+          patientId,
+          appointmentId: appointmentId || undefined,
+          amount: numericAmount,
+          date,
+          method,
+          notes: notes.trim() || undefined,
+        });
+      }
       navigation.goBack();
     } catch (error) {
       showAlert(t('error'), t('failedToSavePayment'), [{ text: t('ok') }]);
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDeletePayment = (paymentId: string) => {
+    showAlert(t('deletePaymentTitle'), t('deletePaymentMsg'), [
+      { text: t('cancel'), style: 'cancel' },
+      {
+        text: t('delete'),
+        style: 'destructive',
+        onPress: () => deletePayment(paymentId),
+      },
+    ]);
   };
 
   if (!patient) {
@@ -206,7 +274,7 @@ export default function AddPaymentScreen() {
 
       {/* Save Button */}
       <Button
-        title={t('savePayment')}
+        title={isEditing ? t('updatePayment') : t('savePayment')}
         onPress={handleSave}
         loading={saving}
         disabled={saving}
@@ -215,44 +283,80 @@ export default function AddPaymentScreen() {
       />
 
       {/* Payment History */}
-      {patientPayments.length > 0 && (
+      {allPaymentItems.length > 0 && (
         <Card style={styles.historyCard}>
           <View style={styles.historyHeader}>
             <Ionicons name="receipt-outline" size={18} color={colors.primary} />
             <Text style={styles.historyTitle}>{t('paymentHistory')}</Text>
           </View>
-          {patientPayments.map((pmt, index) => (
-            <View
-              key={pmt.id}
+          {allPaymentItems.map((item, index) => (
+            <TouchableOpacity
+              key={item.id}
               style={[
                 styles.historyItem,
-                index < patientPayments.length - 1 && styles.historyItemBorder,
+                index < allPaymentItems.length - 1 && styles.historyItemBorder,
               ]}
+              activeOpacity={item.type === 'payment' ? 0.6 : 1}
+              onPress={item.type === 'payment' && item.paymentRecord ? () => {
+                navigation.push('AddPayment', {
+                  patientId,
+                  editPayment: item.paymentRecord,
+                });
+              } : undefined}
             >
               <View style={styles.historyItemLeft}>
-                <View style={styles.historyBadge}>
+                <View style={[styles.historyBadge, item.type === 'appointment' && styles.historyBadgeApt]}>
                   <Ionicons
                     name={
-                      pmt.method === 'cash' ? 'cash-outline' :
-                      pmt.method === 'card' ? 'card-outline' :
-                      pmt.method === 'transfer' ? 'swap-horizontal-outline' :
+                      item.type === 'appointment' ? 'medical-outline' :
+                      item.method === 'cash' ? 'cash-outline' :
+                      item.method === 'card' ? 'card-outline' :
+                      item.method === 'transfer' ? 'swap-horizontal-outline' :
                       'ellipsis-horizontal-outline'
                     }
                     size={14}
-                    color={colors.success}
+                    color={item.type === 'appointment' ? colors.primary : colors.success}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.historyAmount}>{formatCurrency(pmt.amount)}</Text>
-                  <Text style={styles.historyMeta}>
-                    {formatDate(pmt.date)} · {methodLabels[pmt.method] ?? pmt.method}
-                  </Text>
-                  {pmt.notes ? (
-                    <Text style={styles.historyNotes} numberOfLines={1}>{pmt.notes}</Text>
+                  <View style={styles.historyTopRow}>
+                    <Text style={[styles.historyAmount, item.type === 'appointment' && { color: colors.primary }]}>
+                      {formatCurrency(item.amount)}
+                    </Text>
+                    <Text style={styles.historyMethodTag}>
+                      {item.type === 'appointment' ? t('appointment') : (methodLabels[item.method!] ?? item.method)}
+                    </Text>
+                  </View>
+                  <Text style={styles.historyMeta}>{formatDate(item.date)}</Text>
+                  {item.appointmentTime && (
+                    <View style={styles.historyAptLink}>
+                      <Ionicons name="time-outline" size={10} color={colors.textMuted} />
+                      <Text style={styles.historyAptText}>{item.appointmentTime}</Text>
+                    </View>
+                  )}
+                  {item.notes ? (
+                    <Text style={styles.historyNotes} numberOfLines={2}>{item.notes}</Text>
                   ) : null}
                 </View>
               </View>
-            </View>
+              <View style={styles.historyActions}>
+                {item.type === 'payment' && (
+                  <>
+                    <Ionicons name="create-outline" size={14} color={colors.textMuted} />
+                    <TouchableOpacity
+                      style={styles.historyDeleteBtn}
+                      onPress={() => handleDeletePayment(item.id)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Ionicons name="trash-outline" size={14} color={colors.danger} />
+                    </TouchableOpacity>
+                  </>
+                )}
+                {item.type === 'appointment' && (
+                  <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
+                )}
+              </View>
+            </TouchableOpacity>
           ))}
         </Card>
       )}
@@ -432,20 +536,58 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  historyTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   historyAmount: {
     fontSize: fontSize.md,
     fontWeight: '700',
     color: colors.success,
+  },
+  historyMethodTag: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    backgroundColor: colors.borderLight,
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 1,
+    borderRadius: borderRadius.sm,
+    overflow: 'hidden',
   },
   historyMeta: {
     fontSize: fontSize.xs,
     color: colors.textSecondary,
     marginTop: 2,
   },
+  historyAptLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 2,
+  },
+  historyAptText: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+  },
   historyNotes: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
     fontStyle: 'italic',
-    marginTop: 2,
+    marginTop: 3,
+    lineHeight: 16,
+  },
+  historyBadgeApt: {
+    backgroundColor: colors.primaryBg,
+  },
+  historyActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginLeft: spacing.xs,
+  },
+  historyDeleteBtn: {
+    padding: spacing.xs,
   },
 });

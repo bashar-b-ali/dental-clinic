@@ -116,7 +116,7 @@ export type RootStackParamList = {
   PatientDetail: { patientId: string };
   AddAppointment: { appointment?: Appointment; patientId?: string; date?: string };
   AppointmentDetail: { appointmentId: string };
-  AddPayment: { patientId: string; appointmentId?: string };
+  AddPayment: { patientId: string; appointmentId?: string; editPayment?: Payment };
   Reports: undefined;
   PatientFiles: { patientId: string; appointmentId?: string };
   FileViewer: { fileId: string };

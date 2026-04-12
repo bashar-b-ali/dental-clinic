@@ -36,6 +36,7 @@ export const translations: Record<Language, Record<string, string>> = {
     header_appointment: 'Appointment',
     header_appointmentDetail: 'Appointment Details',
     header_recordPayment: 'Record Payment',
+    header_editPayment: 'Edit Payment',
     header_reports: 'Reports & Analytics',
     header_patientFiles: 'Patient Files',
 
@@ -325,6 +326,12 @@ export const translations: Record<Language, Record<string, string>> = {
     notesOptional: 'Notes (optional)',
     addPaymentNotes: 'Add any notes about this payment...',
     savePayment: 'Save Payment',
+    updatePayment: 'Update Payment',
+    payment: 'payment',
+    payments: 'payments',
+    deletePaymentTitle: 'Delete Payment',
+    deletePaymentMsg: 'Are you sure you want to delete this payment? This cannot be undone.',
+    noPayments: 'No payments yet',
 
     // Reports
     incomeOverview: 'Income Overview',
@@ -507,6 +514,7 @@ export const translations: Record<Language, Record<string, string>> = {
     header_appointment: 'موعد',
     header_appointmentDetail: 'تفاصيل الموعد',
     header_recordPayment: 'تسجيل دفعة',
+    header_editPayment: 'تعديل الدفعة',
     header_reports: 'التقارير والتحليلات',
     header_patientFiles: 'ملفات المريض',
 
@@ -796,6 +804,12 @@ export const translations: Record<Language, Record<string, string>> = {
     notesOptional: 'ملاحظات (اختياري)',
     addPaymentNotes: 'أضف ملاحظات حول هذه الدفعة...',
     savePayment: 'حفظ الدفعة',
+    updatePayment: 'تحديث الدفعة',
+    payment: 'دفعة',
+    payments: 'دفعات',
+    deletePaymentTitle: 'حذف الدفعة',
+    deletePaymentMsg: 'هل أنت متأكد من حذف هذه الدفعة؟ لا يمكن التراجع عن هذا.',
+    noPayments: 'لا توجد دفعات بعد',
 
     // Reports
     incomeOverview: 'نظرة عامة على الدخل',

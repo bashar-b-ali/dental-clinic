@@ -219,7 +219,7 @@ export default function AppNavigator() {
               <Stack.Screen name="PatientDetail" component={PatientDetailScreen} options={{ title: t('header_patientDetail') }} />
               <Stack.Screen name="AddAppointment" component={AddAppointmentScreen} options={{ title: t('header_appointment') }} />
               <Stack.Screen name="AppointmentDetail" component={AppointmentDetailScreen} options={{ title: t('header_appointmentDetail') }} />
-              <Stack.Screen name="AddPayment" component={AddPaymentScreen} options={{ title: t('header_recordPayment') }} />
+              <Stack.Screen name="AddPayment" component={AddPaymentScreen} options={({ route }: any) => ({ title: route.params?.editPayment ? t('header_editPayment') : t('header_recordPayment') })} />
               <Stack.Screen name="Reports" component={ReportsScreen} options={{ title: t('header_reports') }} />
               <Stack.Screen name="PatientFiles" component={PatientFilesScreen} options={{ title: t('header_patientFiles') }} />
               <Stack.Screen name="FileViewer" component={FileViewerScreen} options={{ headerShown: false }} />

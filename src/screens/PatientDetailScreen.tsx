@@ -16,7 +16,7 @@ export default function PatientDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { patientId } = route.params;
-  const { patients, appointments, payments, patientFiles, treatmentPlans, deletePatient, updateTreatmentPlan, deleteTreatmentPlan } = useData();
+  const { patients, appointments, payments, patientFiles, treatmentPlans, deletePatient, deletePayment, updateTreatmentPlan, deleteTreatmentPlan } = useData();
   const { t } = useLanguage();
   const { alertConfig, showAlert, dismissAlert } = useAlert();
 
@@ -41,6 +41,71 @@ export default function PatientDetailScreen() {
     () => getPatientBalance(patientId, appointments, payments),
     [patientId, appointments, payments]
   );
+
+  const allPaymentItems = useMemo(() => {
+    const items: Array<{
+      id: string;
+      type: 'payment' | 'appointment';
+      amount: number;
+      date: string;
+      method?: string;
+      notes?: string;
+      appointmentId?: string;
+      appointmentTime?: string;
+      paymentRecord?: typeof payments[0];
+    }> = [];
+
+    payments
+      .filter((p) => p.patientId === patientId)
+      .forEach((p) => {
+        const apt = p.appointmentId ? appointments.find((a) => a.id === p.appointmentId) : null;
+        items.push({
+          id: p.id,
+          type: 'payment',
+          amount: p.amount,
+          date: p.date,
+          method: p.method,
+          notes: p.notes,
+          appointmentId: p.appointmentId,
+          appointmentTime: apt?.time,
+          paymentRecord: p,
+        });
+      });
+
+    appointments
+      .filter((a) => a.patientId === patientId && a.amountPaid > 0 && a.status !== 'cancelled')
+      .forEach((a) => {
+        items.push({
+          id: `apt-${a.id}`,
+          type: 'appointment',
+          amount: a.amountPaid,
+          date: a.date,
+          notes: a.chiefComplaint,
+          appointmentId: a.id,
+          appointmentTime: a.time,
+        });
+      });
+
+    return items.sort((a, b) => b.date.localeCompare(a.date));
+  }, [payments, appointments, patientId]);
+
+  const methodLabels: Record<string, string> = {
+    cash: t('cash'),
+    card: t('card'),
+    transfer: t('transfer'),
+    other: t('catOther'),
+  };
+
+  const handleDeletePayment = (paymentId: string) => {
+    showAlert(t('deletePaymentTitle'), t('deletePaymentMsg'), [
+      { text: t('cancel'), style: 'cancel' },
+      {
+        text: t('delete'),
+        style: 'destructive',
+        onPress: () => deletePayment(paymentId),
+      },
+    ]);
+  };
 
   const patientTreatmentPlans = useMemo(
     () => treatmentPlans.filter((p) => p.patientId === patientId),
@@ -231,6 +296,106 @@ export default function PatientDetailScreen() {
               />
             </View>
           </Card>
+        </View>
+
+        {/* Payment History */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t('paymentHistory')}</Text>
+            <Text style={styles.appointmentCount}>
+              {allPaymentItems.length} {allPaymentItems.length === 1 ? t('payment') : t('payments')}
+            </Text>
+          </View>
+          {allPaymentItems.length === 0 ? (
+            <Card>
+              <View style={styles.emptyAppointments}>
+                <Ionicons name="receipt-outline" size={36} color={colors.textMuted} />
+                <Text style={styles.emptyText}>{t('noPayments')}</Text>
+              </View>
+            </Card>
+          ) : (
+            <Card>
+              {allPaymentItems.map((item, index) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.pmtItem,
+                    index < allPaymentItems.length - 1 && styles.pmtItemBorder,
+                  ]}
+                  activeOpacity={item.type === 'payment' ? 0.6 : 1}
+                  onPress={item.type === 'payment' && item.paymentRecord ? () => {
+                    navigation.navigate('AddPayment', {
+                      patientId,
+                      editPayment: item.paymentRecord,
+                    });
+                  } : undefined}
+                >
+                  <View style={styles.pmtLeft}>
+                    <View style={[styles.pmtBadge, {
+                      backgroundColor: item.type === 'appointment' ? colors.primaryBg :
+                        item.method === 'cash' ? colors.successBg :
+                        item.method === 'card' ? colors.primaryBg :
+                        item.method === 'transfer' ? '#E8F0FE' : colors.borderLight,
+                    }]}>
+                      <Ionicons
+                        name={
+                          item.type === 'appointment' ? 'medical-outline' :
+                          item.method === 'cash' ? 'cash-outline' :
+                          item.method === 'card' ? 'card-outline' :
+                          item.method === 'transfer' ? 'swap-horizontal-outline' :
+                          'ellipsis-horizontal-outline'
+                        }
+                        size={16}
+                        color={
+                          item.type === 'appointment' ? colors.primary :
+                          item.method === 'cash' ? colors.success :
+                          item.method === 'card' ? colors.primary :
+                          item.method === 'transfer' ? '#1A73E8' : colors.textSecondary
+                        }
+                      />
+                    </View>
+                    <View style={styles.pmtInfo}>
+                      <View style={styles.pmtTopRow}>
+                        <Text style={[styles.pmtAmount, item.type === 'appointment' && { color: colors.primary }]}>
+                          {formatCurrency(item.amount)}
+                        </Text>
+                        <Text style={styles.pmtMethodTag}>
+                          {item.type === 'appointment' ? t('appointment') : (methodLabels[item.method!] ?? item.method)}
+                        </Text>
+                      </View>
+                      <Text style={styles.pmtDate}>{formatDate(item.date)}</Text>
+                      {item.appointmentTime && (
+                        <View style={styles.pmtAptLink}>
+                          <Ionicons name="time-outline" size={10} color={colors.textMuted} />
+                          <Text style={styles.pmtAptText}>{item.appointmentTime}</Text>
+                        </View>
+                      )}
+                      {item.notes ? (
+                        <Text style={styles.pmtNotes} numberOfLines={2}>{item.notes}</Text>
+                      ) : null}
+                    </View>
+                  </View>
+                  <View style={styles.pmtActions}>
+                    {item.type === 'payment' && (
+                      <>
+                        <Ionicons name="create-outline" size={14} color={colors.textMuted} />
+                        <TouchableOpacity
+                          style={styles.pmtDeleteBtn}
+                          onPress={() => handleDeletePayment(item.id)}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                          <Ionicons name="trash-outline" size={14} color={colors.danger} />
+                        </TouchableOpacity>
+                      </>
+                    )}
+                    {item.type === 'appointment' && (
+                      <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </Card>
+          )}
         </View>
 
         {/* Files & Images */}
@@ -626,6 +791,85 @@ const styles = StyleSheet.create({
   paymentButtonWrapper: {
     marginTop: spacing.md,
     alignItems: 'center',
+  },
+
+  // Payment history
+  pmtItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm + 2,
+  },
+  pmtItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  pmtLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  pmtBadge: {
+    width: wp(36),
+    height: wp(36),
+    borderRadius: wp(18),
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  pmtInfo: {
+    flex: 1,
+  },
+  pmtTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  pmtAmount: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.success,
+  },
+  pmtMethodTag: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    backgroundColor: colors.borderLight,
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 1,
+    borderRadius: borderRadius.sm,
+    overflow: 'hidden',
+  },
+  pmtDate: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  pmtAptLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 2,
+  },
+  pmtAptText: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+  },
+  pmtNotes: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: 3,
+    lineHeight: 16,
+  },
+  pmtActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginLeft: spacing.xs,
+  },
+  pmtDeleteBtn: {
+    padding: spacing.xs,
   },
 
   // Appointments
