@@ -82,7 +82,7 @@ function getMonth(dateStr: string): number {
 export default function DatePicker({ selectedDate, onSelectDate, appointmentDates }: DatePickerProps) {
   const { t, language, isRTL } = useLanguage();
 
-  const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+  const dayKeys = ['sat', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri'] as const;
 
   // Get current view month from selectedDate
   const viewDate = selectedDate || new Date().toISOString().split('T')[0];
