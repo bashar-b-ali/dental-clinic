@@ -306,6 +306,9 @@ export const translations: Record<Language, Record<string, string>> = {
     noFilesLinked: 'No files linked to this appointment',
     uploadManageFiles: 'Upload / Manage Files',
     editAppointment: 'Edit Appointment',
+    paymentHistory: 'Payment History',
+    noPaymentsYet: 'No payments recorded yet',
+    viaMethod: 'via',
 
     // Add Payment
     invalidAmount: 'Invalid Amount',
@@ -774,6 +777,9 @@ export const translations: Record<Language, Record<string, string>> = {
     noFilesLinked: 'لا توجد ملفات مرتبطة بهذا الموعد',
     uploadManageFiles: 'رفع / إدارة الملفات',
     editAppointment: 'تعديل الموعد',
+    paymentHistory: 'سجل الدفعات',
+    noPaymentsYet: 'لم يتم تسجيل دفعات بعد',
+    viaMethod: 'عبر',
 
     // Add Payment
     invalidAmount: 'مبلغ غير صالح',

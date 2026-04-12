@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useData } from '../context/DataContext';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import DatePicker from '../components/DatePicker';
 import CustomAlert, { useAlert } from '../components/CustomAlert';
 import { useLanguage } from '../i18n/LanguageContext';
 import { colors, spacing, fontSize, borderRadius } from '../utils/theme';
 import { wp } from '../utils/responsive';
-import { formatCurrency, getPatientBalance, getToday } from '../utils/helpers';
+import { formatCurrency, formatDate, getPatientBalance, getToday } from '../utils/helpers';
 
 type PaymentMethod = 'cash' | 'card' | 'transfer' | 'other';
 
@@ -33,6 +35,17 @@ export default function AddPaymentScreen() {
     appointments,
     payments
   );
+
+  const patientPayments = payments
+    .filter((p) => p.patientId === patientId)
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  const methodLabels: Record<string, string> = {
+    cash: t('cash'),
+    card: t('card'),
+    transfer: t('transfer'),
+    other: t('catOther'),
+  };
 
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(getToday());
@@ -152,13 +165,11 @@ export default function AddPaymentScreen() {
         keyboardType="numeric"
       />
 
-      {/* Date Input */}
-      <Input
-        label={t('dateLabel')}
-        placeholder="YYYY-MM-DD"
-        value={date}
-        onChangeText={setDate}
-      />
+      {/* Date */}
+      <Card>
+        <Text style={styles.fieldLabel}>{t('dateLabel')}</Text>
+        <DatePicker selectedDate={date} onSelectDate={setDate} />
+      </Card>
 
       {/* Payment Method */}
       <Text style={styles.fieldLabel}>{t('paymentMethod')}</Text>
@@ -202,6 +213,49 @@ export default function AddPaymentScreen() {
         size="lg"
         style={styles.saveButton}
       />
+
+      {/* Payment History */}
+      {patientPayments.length > 0 && (
+        <Card style={styles.historyCard}>
+          <View style={styles.historyHeader}>
+            <Ionicons name="receipt-outline" size={18} color={colors.primary} />
+            <Text style={styles.historyTitle}>{t('paymentHistory')}</Text>
+          </View>
+          {patientPayments.map((pmt, index) => (
+            <View
+              key={pmt.id}
+              style={[
+                styles.historyItem,
+                index < patientPayments.length - 1 && styles.historyItemBorder,
+              ]}
+            >
+              <View style={styles.historyItemLeft}>
+                <View style={styles.historyBadge}>
+                  <Ionicons
+                    name={
+                      pmt.method === 'cash' ? 'cash-outline' :
+                      pmt.method === 'card' ? 'card-outline' :
+                      pmt.method === 'transfer' ? 'swap-horizontal-outline' :
+                      'ellipsis-horizontal-outline'
+                    }
+                    size={14}
+                    color={colors.success}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.historyAmount}>{formatCurrency(pmt.amount)}</Text>
+                  <Text style={styles.historyMeta}>
+                    {formatDate(pmt.date)} · {methodLabels[pmt.method] ?? pmt.method}
+                  </Text>
+                  {pmt.notes ? (
+                    <Text style={styles.historyNotes} numberOfLines={1}>{pmt.notes}</Text>
+                  ) : null}
+                </View>
+              </View>
+            </View>
+          ))}
+        </Card>
+      )}
 
       <CustomAlert {...alertConfig} onDismiss={dismissAlert} />
     </ScrollView>
@@ -340,5 +394,58 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     marginTop: spacing.sm,
+  },
+  historyCard: {
+    marginTop: spacing.md,
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  historyTitle: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  historyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+  },
+  historyItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  historyItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  historyBadge: {
+    width: wp(32),
+    height: wp(32),
+    borderRadius: wp(16),
+    backgroundColor: colors.successBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyAmount: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.success,
+  },
+  historyMeta: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  historyNotes: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: 2,
   },
 });

@@ -410,15 +410,6 @@ export default function SettingsScreen() {
             icon={<Ionicons name="cloud-upload" size={18} color={colors.primary} />}
             style={styles.actionBtn}
           />
-          <View style={styles.dangerDivider} />
-          <Button
-            title={t('clearAllData')}
-            variant="danger"
-            size="md"
-            onPress={clearData}
-            icon={<Ionicons name="trash" size={18} color={colors.danger} />}
-            style={styles.actionBtn}
-          />
         </View>
       </Card>
 

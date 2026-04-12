@@ -743,7 +743,7 @@ export default function AddAppointmentScreen() {
       </Modal>
 
       {/* ---- Procedure Picker Modal ---- */}
-      <Modal visible={procedureModalVisible} animationType="fade" transparent>
+      <Modal visible={procedureModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
@@ -844,7 +844,7 @@ export default function AddAppointmentScreen() {
       </Modal>
 
       {/* ---- Material Picker Modal ---- */}
-      <Modal visible={materialModalVisible} animationType="fade" transparent>
+      <Modal visible={materialModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
@@ -945,9 +945,9 @@ export default function AddAppointmentScreen() {
       </Modal>
 
       {/* ---- Expense Category Picker Modal ---- */}
-      <Modal visible={expenseCategoryModalVisible} animationType="fade" transparent>
+      <Modal visible={expenseCategoryModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainerSmall}>
+          <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('selectCategoryTitle')}</Text>
               <TouchableOpacity
@@ -993,9 +993,9 @@ export default function AddAppointmentScreen() {
       </Modal>
 
       {/* ---- Treatment Plan Modal ---- */}
-      <Modal visible={treatmentModalVisible} animationType="fade" transparent>
+      <Modal visible={treatmentModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainerSmall}>
+          <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('linkToTreatment')}</Text>
               <TouchableOpacity onPress={() => setTreatmentModalVisible(false)}>
@@ -1319,12 +1319,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
     maxHeight: '80%',
-    paddingBottom: spacing.xl,
-  },
-  modalContainerSmall: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
     paddingBottom: spacing.xl,
   },
   modalHeader: {

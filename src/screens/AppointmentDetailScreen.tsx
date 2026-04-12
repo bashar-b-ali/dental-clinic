@@ -18,7 +18,7 @@ export default function AppointmentDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { appointmentId } = route.params;
-  const { appointments, patients, patientFiles, updateAppointment, deleteAppointment } = useData();
+  const { appointments, patients, payments, patientFiles, updateAppointment, deleteAppointment } = useData();
   const { t } = useLanguage();
   const { alertConfig, showAlert, dismissAlert } = useAlert();
 
@@ -43,6 +43,16 @@ export default function AppointmentDetailScreen() {
   const additionalTotal = appointment.additionalExpenses.reduce((sum, e) => sum + e.amount, 0);
   const total = getAppointmentTotal(appointment);
   const balance = total - appointment.amountPaid;
+  const patientPayments = payments
+    .filter((p) => p.patientId === appointment.patientId)
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  const methodLabels: Record<string, string> = {
+    cash: t('cash'),
+    card: t('card'),
+    transfer: t('transfer'),
+    other: t('catOther'),
+  };
 
   const handleStatusChange = (newStatus: AppointmentStatus) => {
     const labels: Record<string, string> = {
@@ -216,13 +226,33 @@ export default function AppointmentDetailScreen() {
             {appointment.chiefComplaint ? (
               <View style={styles.noteBlock}>
                 <Text style={styles.noteLabel}>{t('chiefComplaint')}</Text>
-                <Text style={styles.noteValue}>{appointment.chiefComplaint}</Text>
+                <View style={styles.noteBox}>
+                  <ScrollView
+                    style={styles.noteScroll}
+                    nestedScrollEnabled
+                    showsVerticalScrollIndicator
+                    persistentScrollbar
+                    indicatorStyle="default"
+                  >
+                    <Text style={styles.noteValue}>{appointment.chiefComplaint}</Text>
+                  </ScrollView>
+                </View>
               </View>
             ) : null}
             {appointment.diagnosis ? (
               <View style={styles.noteBlock}>
                 <Text style={styles.noteLabel}>{t('diagnosis')}</Text>
-                <Text style={styles.noteValue}>{appointment.diagnosis}</Text>
+                <View style={styles.noteBox}>
+                  <ScrollView
+                    style={styles.noteScroll}
+                    nestedScrollEnabled
+                    showsVerticalScrollIndicator
+                    persistentScrollbar
+                    indicatorStyle="default"
+                  >
+                    <Text style={styles.noteValue}>{appointment.diagnosis}</Text>
+                  </ScrollView>
+                </View>
               </View>
             ) : null}
           </Card>
@@ -368,6 +398,53 @@ export default function AppointmentDetailScreen() {
           </View>
         </Card>
 
+        {/* Payment History */}
+        <Card>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="receipt-outline" size={18} color={colors.primary} />
+            <Text style={styles.sectionTitle}>{t('paymentHistory')}</Text>
+          </View>
+          {patientPayments.length > 0 ? (
+            patientPayments.map((pmt, index) => (
+              <View
+                key={pmt.id}
+                style={[
+                  styles.paymentItem,
+                  index < patientPayments.length - 1 && styles.paymentItemBorder,
+                ]}
+              >
+                <View style={styles.paymentItemLeft}>
+                  <View style={styles.paymentMethodBadge}>
+                    <Ionicons
+                      name={
+                        pmt.method === 'cash' ? 'cash-outline' :
+                        pmt.method === 'card' ? 'card-outline' :
+                        pmt.method === 'transfer' ? 'swap-horizontal-outline' :
+                        'ellipsis-horizontal-outline'
+                      }
+                      size={14}
+                      color={colors.success}
+                    />
+                  </View>
+                  <View>
+                    <Text style={styles.paymentAmount}>
+                      {formatCurrency(pmt.amount)}
+                    </Text>
+                    <Text style={styles.paymentMeta}>
+                      {formatDate(pmt.date)} · {methodLabels[pmt.method] ?? pmt.method}
+                    </Text>
+                    {pmt.notes ? (
+                      <Text style={styles.paymentNotes} numberOfLines={1}>{pmt.notes}</Text>
+                    ) : null}
+                  </View>
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.emptyPayments}>{t('noPaymentsYet')}</Text>
+          )}
+        </Card>
+
         {/* Notes */}
         {appointment.notes ? (
           <Card>
@@ -375,7 +452,17 @@ export default function AppointmentDetailScreen() {
               <Ionicons name="chatbox-ellipses-outline" size={18} color={colors.primary} />
               <Text style={styles.sectionTitle}>{t('sectionNotes')}</Text>
             </View>
-            <Text style={styles.notesText}>{appointment.notes}</Text>
+            <View style={styles.noteBox}>
+              <ScrollView
+                style={styles.noteScroll}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator
+                persistentScrollbar
+                indicatorStyle="default"
+              >
+                <Text style={styles.noteValue}>{appointment.notes}</Text>
+              </ScrollView>
+            </View>
           </Card>
         ) : null}
 
@@ -613,6 +700,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: spacing.xs,
   },
+  noteBox: {
+    backgroundColor: colors.bg,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    maxHeight: wp(160),
+    minHeight: wp(60),
+  },
+  noteScroll: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
   noteValue: {
     fontSize: fontSize.md,
     color: colors.text,
@@ -774,12 +873,54 @@ const styles = StyleSheet.create({
     marginVertical: spacing.sm,
   },
 
-  // Notes
-  notesText: {
-    fontSize: fontSize.sm,
-    color: colors.text,
-    lineHeight: 22,
+  // Payment History
+  paymentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
   },
+  paymentItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  paymentItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  paymentMethodBadge: {
+    width: wp(32),
+    height: wp(32),
+    borderRadius: wp(16),
+    backgroundColor: colors.successBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paymentAmount: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.success,
+  },
+  paymentMeta: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  paymentNotes: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  emptyPayments: {
+    textAlign: 'center',
+    color: colors.textMuted,
+    fontSize: fontSize.sm,
+    paddingVertical: spacing.md,
+  },
+
 
   // Files section
   section: {
