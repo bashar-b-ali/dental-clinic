@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useData } from '../context/DataContext';
 import { useLanguage } from '../i18n/LanguageContext';
 import Card from '../components/Card';
+import DatePicker from '../components/DatePicker';
 import Input from '../components/Input';
 import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
@@ -22,6 +23,8 @@ export default function AppointmentsScreen() {
   const insets = useSafeAreaInsets();
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [search, setSearch] = useState('');
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(getToday());
 
   const FILTERS: { key: FilterTab; label: string }[] = [
     { key: 'all', label: t('filterAll') },
@@ -40,19 +43,30 @@ export default function AppointmentsScreen() {
     return { todayCount, upcomingCount, completedCount };
   }, [appointments, today]);
 
+  // Set of dates that have appointments (for calendar dot indicators)
+  const appointmentDates = useMemo(
+    () => new Set(appointments.map((a) => a.date)),
+    [appointments],
+  );
+
   const filteredAppointments = useMemo(() => {
     let result = appointments;
 
-    switch (activeFilter) {
-      case 'today':
-        result = result.filter((a) => a.date === today);
-        break;
-      case 'upcoming':
-        result = result.filter((a) => a.date >= today && a.status === 'scheduled');
-        break;
-      case 'completed':
-        result = result.filter((a) => a.status === 'completed');
-        break;
+    // If calendar is open and a date is selected, filter by that date
+    if (calendarOpen && activeFilter === 'all') {
+      result = result.filter((a) => a.date === selectedCalendarDate);
+    } else {
+      switch (activeFilter) {
+        case 'today':
+          result = result.filter((a) => a.date === today);
+          break;
+        case 'upcoming':
+          result = result.filter((a) => a.date >= today && a.status === 'scheduled');
+          break;
+        case 'completed':
+          result = result.filter((a) => a.status === 'completed');
+          break;
+      }
     }
 
     // Search filter
@@ -69,7 +83,7 @@ export default function AppointmentsScreen() {
     }
 
     return result;
-  }, [appointments, patients, activeFilter, search, today]);
+  }, [appointments, patients, activeFilter, search, today, calendarOpen, selectedCalendarDate]);
 
   const sections = useMemo(() => {
     const grouped: Record<string, typeof filteredAppointments> = {};
@@ -237,6 +251,42 @@ export default function AppointmentsScreen() {
         </View>
       </View>
 
+      {/* Calendar Toggle + Calendar */}
+      <View style={styles.calendarToggleRow}>
+        <TouchableOpacity
+          style={[styles.calendarToggleBtn, calendarOpen && styles.calendarToggleBtnActive]}
+          onPress={() => {
+            setCalendarOpen(!calendarOpen);
+            if (!calendarOpen) setActiveFilter('all');
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={calendarOpen ? 'calendar' : 'calendar-outline'}
+            size={ms(16)}
+            color={calendarOpen ? colors.textOnPrimary : colors.primary}
+          />
+          <Text style={[styles.calendarToggleText, calendarOpen && styles.calendarToggleTextActive]}>
+            {t('filterByDate')}
+          </Text>
+          <Ionicons
+            name={calendarOpen ? 'chevron-up' : 'chevron-down'}
+            size={ms(14)}
+            color={calendarOpen ? colors.textOnPrimary : colors.primary}
+          />
+        </TouchableOpacity>
+      </View>
+
+      {calendarOpen && (
+        <View style={styles.calendarContainer}>
+          <DatePicker
+            selectedDate={selectedCalendarDate}
+            onSelectDate={setSelectedCalendarDate}
+            appointmentDates={appointmentDates}
+          />
+        </View>
+      )}
+
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchInputWrapper}>
@@ -366,6 +416,38 @@ const styles = StyleSheet.create({
   },
   pillTextActive: {
     color: colors.textOnPrimary,
+  },
+  calendarToggleRow: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  calendarToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing.xs,
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primaryBg,
+    borderWidth: 1,
+    borderColor: colors.primary + '30',
+  },
+  calendarToggleBtnActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  calendarToggleText: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  calendarToggleTextActive: {
+    color: colors.textOnPrimary,
+  },
+  calendarContainer: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
   },
   searchContainer: {
     paddingHorizontal: spacing.lg,

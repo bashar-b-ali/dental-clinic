@@ -1,5 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontSize, borderRadius, shadow } from '../utils/theme';
 import { wp, ms } from '../utils/responsive';
@@ -8,21 +8,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 interface DatePickerProps {
   selectedDate: string; // YYYY-MM-DD
   onSelectDate: (date: string) => void;
-}
-
-function getDaysOfWeek(centerDate: string): string[] {
-  const d = new Date(centerDate + 'T12:00:00');
-  const day = d.getDay(); // 0=Sun
-  const start = new Date(d);
-  start.setDate(d.getDate() - day);
-
-  const days: string[] = [];
-  for (let i = 0; i < 7; i++) {
-    const current = new Date(start);
-    current.setDate(start.getDate() + i);
-    days.push(current.toISOString().split('T')[0]);
-  }
-  return days;
+  appointmentDates?: Set<string>; // dates that have appointments (dot indicators)
 }
 
 function getMonthYear(dateStr: string, lang: string): string {
@@ -41,15 +27,58 @@ function isToday(dateStr: string): boolean {
   return dateStr === new Date().toISOString().split('T')[0];
 }
 
-export default function DatePicker({ selectedDate, onSelectDate }: DatePickerProps) {
+function getMonthDays(dateStr: string): string[][] {
+  const d = new Date(dateStr + 'T12:00:00');
+  const year = d.getFullYear();
+  const month = d.getMonth();
+
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+
+  const startDayOfWeek = firstDay.getDay(); // 0=Sun
+  const totalDays = lastDay.getDate();
+
+  const weeks: string[][] = [];
+  let currentWeek: string[] = [];
+
+  // Fill leading blanks
+  for (let i = 0; i < startDayOfWeek; i++) {
+    currentWeek.push('');
+  }
+
+  for (let day = 1; day <= totalDays; day++) {
+    const dateObj = new Date(year, month, day);
+    currentWeek.push(dateObj.toISOString().split('T')[0]);
+    if (currentWeek.length === 7) {
+      weeks.push(currentWeek);
+      currentWeek = [];
+    }
+  }
+
+  // Fill trailing blanks
+  if (currentWeek.length > 0) {
+    while (currentWeek.length < 7) {
+      currentWeek.push('');
+    }
+    weeks.push(currentWeek);
+  }
+
+  return weeks;
+}
+
+export default function DatePicker({ selectedDate, onSelectDate, appointmentDates }: DatePickerProps) {
   const { t, language, isRTL } = useLanguage();
-  const weekDates = getDaysOfWeek(selectedDate);
 
   const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
-  const navigateWeek = (direction: number) => {
-    const d = new Date(selectedDate + 'T12:00:00');
-    d.setDate(d.getDate() + direction * 7);
+  // Get current view month from selectedDate
+  const viewDate = selectedDate || new Date().toISOString().split('T')[0];
+  const weeks = useMemo(() => getMonthDays(viewDate), [viewDate]);
+
+  const navigateMonth = (direction: number) => {
+    const d = new Date(viewDate + 'T12:00:00');
+    d.setMonth(d.getMonth() + direction);
+    d.setDate(1);
     onSelectDate(d.toISOString().split('T')[0]);
   };
 
@@ -61,13 +90,13 @@ export default function DatePicker({ selectedDate, onSelectDate }: DatePickerPro
     <View style={styles.container}>
       {/* Month header with navigation */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigateWeek(-1)} style={styles.navButton}>
-          <Ionicons name={isRTL ? 'chevron-forward' : 'chevron-back'} size={ms(20)} color={colors.primary} />
+        <TouchableOpacity onPress={() => navigateMonth(-1)} style={styles.navButton}>
+          <Ionicons name={isRTL ? 'chevron-forward' : 'chevron-back'} size={ms(18)} color={colors.primary} />
         </TouchableOpacity>
 
         <TouchableOpacity onPress={goToToday} style={styles.monthContainer}>
           <Text style={styles.monthText}>
-            {getMonthYear(selectedDate, language)}
+            {getMonthYear(viewDate, language)}
           </Text>
           {!isToday(selectedDate) && (
             <View style={styles.todayBadge}>
@@ -76,64 +105,71 @@ export default function DatePicker({ selectedDate, onSelectDate }: DatePickerPro
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigateWeek(1)} style={styles.navButton}>
-          <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={ms(20)} color={colors.primary} />
+        <TouchableOpacity onPress={() => navigateMonth(1)} style={styles.navButton}>
+          <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={ms(18)} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
-      {/* Days strip */}
-      <View style={styles.daysRow}>
-        {weekDates.map((dateStr) => {
-          const d = new Date(dateStr + 'T12:00:00');
-          const dayIndex = d.getDay();
-          const dayNum = d.getDate();
-          const isSelected = dateStr === selectedDate;
-          const isTodayDate = isToday(dateStr);
-
-          return (
-            <TouchableOpacity
-              key={dateStr}
-              style={[
-                styles.dayCell,
-                isSelected && styles.dayCellSelected,
-                isTodayDate && !isSelected && styles.dayCellToday,
-              ]}
-              onPress={() => onSelectDate(dateStr)}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.dayName,
-                  isSelected && styles.dayNameSelected,
-                  isTodayDate && !isSelected && styles.dayNameToday,
-                ]}
-              >
-                {t(dayKeys[dayIndex])}
-              </Text>
-              <Text
-                style={[
-                  styles.dayNumber,
-                  isSelected && styles.dayNumberSelected,
-                  isTodayDate && !isSelected && styles.dayNumberToday,
-                ]}
-              >
-                {dayNum}
-              </Text>
-              {isTodayDate && (
-                <View
-                  style={[
-                    styles.todayDot,
-                    isSelected && styles.todayDotSelected,
-                  ]}
-                />
-              )}
-            </TouchableOpacity>
-          );
-        })}
+      {/* Day names header */}
+      <View style={styles.dayNamesRow}>
+        {dayKeys.map((key) => (
+          <View key={key} style={styles.dayNameCell}>
+            <Text style={styles.dayNameText}>{t(key)}</Text>
+          </View>
+        ))}
       </View>
+
+      {/* Calendar grid */}
+      {weeks.map((week, weekIndex) => (
+        <View key={weekIndex} style={styles.weekRow}>
+          {week.map((dateStr, dayIndex) => {
+            if (!dateStr) {
+              return <View key={`empty-${dayIndex}`} style={styles.dayCell} />;
+            }
+
+            const dayNum = new Date(dateStr + 'T12:00:00').getDate();
+            const isSelected = dateStr === selectedDate;
+            const isTodayDate = isToday(dateStr);
+            const hasAppointment = appointmentDates?.has(dateStr);
+
+            return (
+              <TouchableOpacity
+                key={dateStr}
+                style={[
+                  styles.dayCell,
+                  isSelected && styles.dayCellSelected,
+                  isTodayDate && !isSelected && styles.dayCellToday,
+                ]}
+                onPress={() => onSelectDate(dateStr)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.dayNumber,
+                    isSelected && styles.dayNumberSelected,
+                    isTodayDate && !isSelected && styles.dayNumberToday,
+                  ]}
+                >
+                  {dayNum}
+                </Text>
+                {hasAppointment && (
+                  <View
+                    style={[
+                      styles.appointmentDot,
+                      isSelected && styles.appointmentDotSelected,
+                    ]}
+                  />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ))}
     </View>
   );
 }
+
+const CELL_SIZE = wp(42);
 
 const styles = StyleSheet.create({
   container: {
@@ -150,8 +186,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
   navButton: {
-    width: wp(36),
-    height: wp(36),
+    width: wp(32),
+    height: wp(32),
     borderRadius: borderRadius.full,
     backgroundColor: colors.primaryBg,
     alignItems: 'center',
@@ -178,60 +214,58 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.primary,
   },
-  daysRow: {
+  dayNamesRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: wp(4),
+    marginBottom: spacing.xs,
+  },
+  dayNameCell: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+  },
+  dayNameText: {
+    fontSize: ms(10),
+    fontWeight: '700',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+  },
+  weekRow: {
+    flexDirection: 'row',
   },
   dayCell: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.bg,
-    minHeight: wp(68),
     justifyContent: 'center',
-    gap: spacing.xs - 1,
+    height: CELL_SIZE,
+    borderRadius: CELL_SIZE / 2,
   },
   dayCellSelected: {
     backgroundColor: colors.primary,
-    ...shadow.md,
   },
   dayCellToday: {
     backgroundColor: colors.primaryBg,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-  },
-  dayName: {
-    fontSize: ms(11),
-    fontWeight: '600',
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-  },
-  dayNameSelected: {
-    color: colors.textOnPrimary,
-  },
-  dayNameToday: {
-    color: colors.primary,
   },
   dayNumber: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
+    fontSize: fontSize.sm,
+    fontWeight: '600',
     color: colors.text,
   },
   dayNumberSelected: {
     color: colors.textOnPrimary,
+    fontWeight: '700',
   },
   dayNumberToday: {
     color: colors.primary,
+    fontWeight: '700',
   },
-  todayDot: {
+  appointmentDot: {
     width: 5,
     height: 5,
     borderRadius: 3,
     backgroundColor: colors.primary,
+    marginTop: 2,
   },
-  todayDotSelected: {
+  appointmentDotSelected: {
     backgroundColor: colors.textOnPrimary,
   },
 });

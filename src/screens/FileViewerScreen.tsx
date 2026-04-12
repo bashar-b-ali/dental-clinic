@@ -11,10 +11,12 @@ import {
   Dimensions,
   FlatList,
   StatusBar,
+  Animated,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { PinchGestureHandler, State as GestureState, PinchGestureHandlerStateChangeEvent, PinchGestureHandlerGestureEvent } from 'react-native-gesture-handler';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Sharing from 'expo-sharing';
@@ -37,28 +39,59 @@ function getFileIcon(fileType: string): keyof typeof Ionicons.glyphMap {
   }
 }
 
-// Zoomable image component
+// Zoomable image component with pinch-to-zoom
 function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
-  const scrollRef = useRef<ScrollView>(null);
-  const [isZoomed, setIsZoomed] = useState(false);
+  const baseScaleRef = useRef(1);
+  const pinchScale = useRef(new Animated.Value(1)).current;
+  const savedScale = useRef(new Animated.Value(1)).current;
+  const displayScale = Animated.multiply(savedScale, pinchScale);
   const lastTap = useRef(0);
+
+  const onPinchEvent = Animated.event(
+    [{ nativeEvent: { scale: pinchScale } }],
+    { useNativeDriver: true },
+  );
+
+  const onPinchStateChange = (event: PinchGestureHandlerStateChangeEvent) => {
+    if (event.nativeEvent.oldState === GestureState.ACTIVE) {
+      const newScale = baseScaleRef.current * event.nativeEvent.scale;
+      const clamped = Math.min(Math.max(newScale, 1), 5);
+      baseScaleRef.current = clamped;
+      savedScale.setValue(clamped);
+      pinchScale.setValue(1);
+
+      if (clamped <= 1.05) {
+        baseScaleRef.current = 1;
+        savedScale.setValue(1);
+        Animated.spring(savedScale, {
+          toValue: 1,
+          useNativeDriver: true,
+        }).start();
+      }
+    }
+  };
 
   const handleTap = () => {
     const now = Date.now();
     if (now - lastTap.current < 300) {
       // Double tap - toggle zoom
-      if (isZoomed) {
-        scrollRef.current?.scrollTo({ x: 0, y: 0, animated: true });
-        // @ts-ignore - setNativeProps exists
-        scrollRef.current?.setNativeProps?.({ zoomScale: 1 });
-        setIsZoomed(false);
+      pinchScale.setValue(1);
+      if (baseScaleRef.current > 1.05) {
+        baseScaleRef.current = 1;
+        Animated.spring(savedScale, {
+          toValue: 1,
+          useNativeDriver: true,
+        }).start();
       } else {
-        setIsZoomed(true);
+        baseScaleRef.current = 2.5;
+        Animated.spring(savedScale, {
+          toValue: 2.5,
+          useNativeDriver: true,
+        }).start();
       }
       lastTap.current = 0;
     } else {
       lastTap.current = now;
-      // Single tap after timeout
       setTimeout(() => {
         if (lastTap.current === now) {
           onTap();
@@ -68,28 +101,20 @@ function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
   };
 
   return (
-    <ScrollView
-      ref={scrollRef}
-      maximumZoomScale={5}
-      minimumZoomScale={1}
-      showsHorizontalScrollIndicator={false}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.zoomContent}
-      centerContent
-      bounces={false}
-      onScrollEndDrag={(e) => {
-        const scale = e.nativeEvent.zoomScale;
-        setIsZoomed(scale > 1.05);
-      }}
+    <PinchGestureHandler
+      onGestureEvent={onPinchEvent}
+      onHandlerStateChange={onPinchStateChange}
     >
-      <TouchableOpacity activeOpacity={1} onPress={handleTap}>
-        <Image
-          source={{ uri }}
-          style={styles.fullImage}
-          resizeMode="contain"
-        />
-      </TouchableOpacity>
-    </ScrollView>
+      <Animated.View style={[styles.zoomContent, { transform: [{ scale: displayScale }] }]}>
+        <TouchableOpacity activeOpacity={1} onPress={handleTap}>
+          <Image
+            source={{ uri }}
+            style={styles.fullImage}
+            resizeMode="contain"
+          />
+        </TouchableOpacity>
+      </Animated.View>
+    </PinchGestureHandler>
   );
 }
 

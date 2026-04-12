@@ -27,7 +27,7 @@ const APP_VERSION = '1.0.0';
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
   const { doctor, patients, appointments, payments, patientFiles, setDoctor, mergeData, refreshData } = useData();
-  const { t, language, setLanguage } = useLanguage();
+  const { t, language, setLanguage, setOnRestartNeeded } = useLanguage();
   const { onChangePassword } = usePasswordAction();
   const insets = useSafeAreaInsets();
 
@@ -42,6 +42,14 @@ export default function SettingsScreen() {
   useEffect(() => {
     notifications.getNotificationsEnabled().then(setNotificationsOn);
   }, []);
+
+  // Register restart callback so language switch uses CustomAlert
+  useEffect(() => {
+    setOnRestartNeeded((title: string, msg: string) => {
+      showAlert(title, msg, [{ text: t('ok') }]);
+    });
+    return () => setOnRestartNeeded(null);
+  }, [setOnRestartNeeded, showAlert, t]);
 
   const handleToggleNotifications = useCallback(async (value: boolean) => {
     if (value) {

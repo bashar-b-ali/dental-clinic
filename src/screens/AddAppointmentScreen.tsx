@@ -673,7 +673,7 @@ export default function AddAppointmentScreen() {
 
       {/* ---- Patient Selection Modal ---- */}
       <Modal visible={patientModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('selectPatientTitle')}</Text>
@@ -731,12 +731,12 @@ export default function AddAppointmentScreen() {
               style={styles.modalList}
             />
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ---- Procedure Picker Modal ---- */}
       <Modal visible={procedureModalVisible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('selectProcedureTitle')}</Text>
@@ -831,12 +831,12 @@ export default function AddAppointmentScreen() {
               </View>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ---- Material Picker Modal ---- */}
       <Modal visible={materialModalVisible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('selectMaterialTitle')}</Text>
@@ -931,7 +931,7 @@ export default function AddAppointmentScreen() {
               </View>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ---- Expense Category Picker Modal ---- */}
@@ -984,7 +984,7 @@ export default function AddAppointmentScreen() {
 
       {/* ---- Treatment Plan Modal ---- */}
       <Modal visible={treatmentModalVisible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalContainerSmall}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('linkToTreatment')}</Text>
@@ -1074,7 +1074,7 @@ export default function AddAppointmentScreen() {
               </TouchableOpacity>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Custom Alert */}
