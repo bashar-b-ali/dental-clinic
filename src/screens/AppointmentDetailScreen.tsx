@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useData } from '../context/DataContext';
@@ -8,6 +8,7 @@ import Card from '../components/Card';
 import StatusBadge from '../components/StatusBadge';
 import Button from '../components/Button';
 import ToothChart from '../components/ToothChart';
+import CustomAlert, { useAlert } from '../components/CustomAlert';
 import { colors, spacing, fontSize, borderRadius, shadow } from '../utils/theme';
 import { formatDate, formatCurrency, getPatientName, getAppointmentTotal } from '../utils/helpers';
 import { wp } from '../utils/responsive';
@@ -19,6 +20,7 @@ export default function AppointmentDetailScreen() {
   const { appointmentId } = route.params;
   const { appointments, patients, patientFiles, updateAppointment, deleteAppointment } = useData();
   const { t } = useLanguage();
+  const { alertConfig, showAlert, dismissAlert } = useAlert();
 
   const appointment = appointments.find((a) => a.id === appointmentId);
 
@@ -49,10 +51,10 @@ export default function AppointmentDetailScreen() {
       'no-show': t('markNoShow'),
     };
 
-    Alert.alert(labels[newStatus], t('changeStatusConfirm'), [
+    showAlert(labels[newStatus], t('changeStatusConfirm'), [
       { text: t('cancel'), style: 'cancel' },
       {
-        text: 'Confirm',
+        text: t('confirm'),
         style: newStatus === 'cancelled' ? 'destructive' : 'default',
         onPress: async () => {
           await updateAppointment({ ...appointment, status: newStatus });
@@ -62,7 +64,7 @@ export default function AppointmentDetailScreen() {
   };
 
   const handleDelete = () => {
-    Alert.alert(
+    showAlert(
       t('deleteAppointment'),
       t('deleteAppointmentMsg'),
       [
@@ -480,6 +482,7 @@ export default function AppointmentDetailScreen() {
           />
         </View>
       </ScrollView>
+      <CustomAlert {...alertConfig} onDismiss={dismissAlert} />
     </View>
   );
 }

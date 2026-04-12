@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { I18nManager } from 'react-native';
+import { I18nManager, NativeModules, Platform, Alert } from 'react-native';
 import { translations, Language } from './translations';
 
 const LANGUAGE_KEY = '@mobo_language';
@@ -21,6 +21,12 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.getItem(LANGUAGE_KEY).then((stored) => {
       if (stored === 'ar' || stored === 'en') {
         setLanguageState(stored);
+        // Ensure I18nManager matches stored language
+        const shouldBeRTL = stored === 'ar';
+        if (I18nManager.isRTL !== shouldBeRTL) {
+          I18nManager.allowRTL(true);
+          I18nManager.forceRTL(shouldBeRTL);
+        }
       }
     });
   }, []);
@@ -28,6 +34,25 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const setLanguage = useCallback(async (lang: Language) => {
     setLanguageState(lang);
     await AsyncStorage.setItem(LANGUAGE_KEY, lang);
+
+    const shouldBeRTL = lang === 'ar';
+    if (I18nManager.isRTL !== shouldBeRTL) {
+      I18nManager.allowRTL(true);
+      I18nManager.forceRTL(shouldBeRTL);
+      // Reload the app to apply RTL changes
+      setTimeout(() => {
+        if (__DEV__ && NativeModules.DevSettings) {
+          NativeModules.DevSettings.reload();
+        } else {
+          // In production, show restart message
+          const title = lang === 'ar' ? 'إعادة تشغيل مطلوبة' : 'Restart Required';
+          const msg = lang === 'ar'
+            ? 'يرجى إعادة تشغيل التطبيق لتطبيق تغيير اتجاه التصميم.'
+            : 'Please restart the app to apply the layout direction change.';
+          Alert.alert(title, msg);
+        }
+      }, 100);
+    }
   }, []);
 
   const t = useCallback(

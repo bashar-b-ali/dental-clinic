@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useData } from '../context/DataContext';
@@ -7,6 +7,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import Card from '../components/Card';
 import StatusBadge from '../components/StatusBadge';
 import Button from '../components/Button';
+import CustomAlert, { useAlert } from '../components/CustomAlert';
 import { colors, spacing, fontSize, borderRadius, shadow } from '../utils/theme';
 import { formatDate, formatCurrency, getPatientBalance, getAppointmentTotal } from '../utils/helpers';
 import { wp } from '../utils/responsive';
@@ -15,8 +16,9 @@ export default function PatientDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { patientId } = route.params;
-  const { patients, appointments, payments, patientFiles, deletePatient } = useData();
+  const { patients, appointments, payments, patientFiles, treatmentPlans, deletePatient, updateTreatmentPlan, deleteTreatmentPlan } = useData();
   const { t } = useLanguage();
+  const { alertConfig, showAlert, dismissAlert } = useAlert();
 
   const patient = useMemo(
     () => patients.find((p) => p.id === patientId),
@@ -40,6 +42,11 @@ export default function PatientDetailScreen() {
     [patientId, appointments, payments]
   );
 
+  const patientTreatmentPlans = useMemo(
+    () => treatmentPlans.filter((p) => p.patientId === patientId),
+    [treatmentPlans, patientId]
+  );
+
   const handleDelete = () => {
     if (!patient) return;
 
@@ -48,7 +55,7 @@ export default function PatientDetailScreen() {
       ? t('deletePatientWithAppts')
       : t('deletePatientMsg');
 
-    Alert.alert(t('deletePatientTitle'), message, [
+    showAlert(t('deletePatientTitle'), message, [
       { text: t('cancel'), style: 'cancel' },
       {
         text: t('delete'),
@@ -56,6 +63,36 @@ export default function PatientDetailScreen() {
         onPress: async () => {
           await deletePatient(patientId);
           navigation.goBack();
+        },
+      },
+    ]);
+  };
+
+  const handleTogglePlanStatus = (planId: string, currentStatus: string) => {
+    const plan = treatmentPlans.find((p) => p.id === planId);
+    if (!plan) return;
+    const newStatus = currentStatus === 'active' ? 'completed' : 'active';
+    const title = newStatus === 'completed' ? t('markPlanComplete') : t('markPlanActive');
+    const msg = newStatus === 'completed' ? t('markPlanCompleteMsg') : t('markPlanActiveMsg');
+    showAlert(title, msg, [
+      { text: t('cancel'), style: 'cancel' },
+      {
+        text: t('confirm'),
+        onPress: async () => {
+          await updateTreatmentPlan({ ...plan, status: newStatus as 'active' | 'completed' });
+        },
+      },
+    ]);
+  };
+
+  const handleDeletePlan = (planId: string) => {
+    showAlert(t('deletePlan'), t('deletePlanMsg'), [
+      { text: t('cancel'), style: 'cancel' },
+      {
+        text: t('delete'),
+        style: 'destructive',
+        onPress: async () => {
+          await deleteTreatmentPlan(planId);
         },
       },
     ]);
@@ -252,6 +289,63 @@ export default function PatientDetailScreen() {
           />
         </View>
 
+        {/* Treatment Plans */}
+        {patientTreatmentPlans.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t('treatmentPlans')}</Text>
+              <Text style={styles.appointmentCount}>
+                {patientTreatmentPlans.filter((p) => p.status === 'active').length} {t('activePlans')}
+              </Text>
+            </View>
+            {patientTreatmentPlans.map((plan) => {
+              const sessionCount = appointments.filter((a) => a.treatmentPlanId === plan.id).length;
+              const isActive = plan.status === 'active';
+              return (
+                <Card key={plan.id}>
+                  <View style={styles.treatmentHeader}>
+                    <View style={[styles.treatmentStatusDot, { backgroundColor: isActive ? colors.success : colors.textMuted }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.treatmentName}>{plan.name}</Text>
+                      <View style={styles.treatmentMeta}>
+                        <View style={styles.treatmentChip}>
+                          <Ionicons name="medical-outline" size={12} color={colors.primary} />
+                          <Text style={styles.treatmentChipText}>
+                            {plan.toothNumbers.map((n) => `#${n}`).join(', ')}
+                          </Text>
+                        </View>
+                        <View style={styles.treatmentChip}>
+                          <Ionicons name="calendar-outline" size={12} color={colors.primary} />
+                          <Text style={styles.treatmentChipText}>
+                            {sessionCount} {sessionCount === 1 ? t('session') : t('sessions')}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.treatmentActions}>
+                    <TouchableOpacity
+                      style={[styles.treatmentActionBtn, { backgroundColor: isActive ? colors.successBg : colors.primaryBg }]}
+                      onPress={() => handleTogglePlanStatus(plan.id, plan.status)}
+                    >
+                      <Ionicons name={isActive ? 'checkmark-circle-outline' : 'refresh-outline'} size={14} color={isActive ? colors.success : colors.primary} />
+                      <Text style={[styles.treatmentActionText, { color: isActive ? colors.success : colors.primary }]}>
+                        {isActive ? t('completePlan') : t('reactivatePlan')}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.treatmentActionBtn, { backgroundColor: colors.dangerBg }]}
+                      onPress={() => handleDeletePlan(plan.id)}
+                    >
+                      <Ionicons name="trash-outline" size={14} color={colors.danger} />
+                    </TouchableOpacity>
+                  </View>
+                </Card>
+              );
+            })}
+          </View>
+        )}
+
         {/* Appointments */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -327,6 +421,7 @@ export default function PatientDetailScreen() {
           </View>
         </View>
       </ScrollView>
+      <CustomAlert {...alertConfig} onDismiss={dismissAlert} />
     </View>
   );
 }
@@ -640,5 +735,63 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: '600',
     color: colors.primary,
+  },
+
+  // Treatment Plans
+  treatmentHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  treatmentStatusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginTop: 5,
+  },
+  treatmentName: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  treatmentMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  treatmentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primaryBg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: borderRadius.full,
+  },
+  treatmentChipText: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  treatmentActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    paddingTop: spacing.sm,
+  },
+  treatmentActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+  },
+  treatmentActionText: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
   },
 });

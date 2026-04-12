@@ -127,6 +127,26 @@ export const DENTAL_PROCEDURES = [
   'Other',
 ];
 
+export const PROCEDURE_AR: Record<string, string> = {
+  'Cleaning': 'تنظيف',
+  'Filling': 'حشوة',
+  'Crown': 'تاج',
+  'Root Canal': 'علاج عصب',
+  'Extraction': 'خلع',
+  'Whitening': 'تبييض',
+  'Veneer': 'قشرة',
+  'Bridge': 'جسر',
+  'Implant': 'زراعة',
+  'Denture': 'طقم أسنان',
+  'Scaling': 'تقليح',
+  'X-Ray': 'أشعة سينية',
+  'Consultation': 'استشارة',
+  'Emergency': 'طوارئ',
+  'Orthodontics': 'تقويم',
+  'Periodontal Treatment': 'علاج لثة',
+  'Other': 'أخرى',
+};
+
 export const COMMON_MATERIALS = [
   'Composite Resin',
   'Amalgam',
@@ -143,3 +163,30 @@ export const COMMON_MATERIALS = [
   'Rubber Dam',
   'Other',
 ];
+
+export const MATERIAL_AR: Record<string, string> = {
+  'Composite Resin': 'راتنج مركب',
+  'Amalgam': 'أملغم',
+  'Ceramic': 'سيراميك',
+  'Gold': 'ذهب',
+  'Porcelain': 'بورسلين',
+  'Acrylic': 'أكريليك',
+  'Titanium Implant': 'غرسة تيتانيوم',
+  'Dental Cement': 'إسمنت أسنان',
+  'Impression Material': 'مادة طبعة',
+  'Anesthetic': 'مخدر',
+  'Sutures': 'خيوط جراحية',
+  'Temporary Crown': 'تاج مؤقت',
+  'Rubber Dam': 'حاجز مطاطي',
+  'Other': 'أخرى',
+};
+
+export function translateProcedure(proc: string, lang: string): string {
+  if (lang === 'ar') return PROCEDURE_AR[proc] ?? proc;
+  return proc;
+}
+
+export function translateMaterial(mat: string, lang: string): string {
+  if (lang === 'ar') return MATERIAL_AR[mat] ?? mat;
+  return mat;
+}

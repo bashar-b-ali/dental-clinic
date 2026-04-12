@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
-import { AppData, ExportData, Doctor, Patient, Appointment, Payment, PatientFile } from '../types';
+import { AppData, ExportData, Doctor, Patient, Appointment, Payment, PatientFile, TreatmentPlan } from '../types';
 
 const STORAGE_KEYS = {
   DOCTOR: '@mobo_doctor',
@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   APPOINTMENTS: '@mobo_appointments',
   PAYMENTS: '@mobo_payments',
   PATIENT_FILES: '@mobo_patient_files',
+  TREATMENT_PLANS: '@mobo_treatment_plans',
   ONBOARDED: '@mobo_onboarded',
 };
 
@@ -84,6 +85,15 @@ export async function savePatientFiles(files: PatientFile[]): Promise<void> {
   await AsyncStorage.setItem(STORAGE_KEYS.PATIENT_FILES, JSON.stringify(files));
 }
 
+export async function getTreatmentPlans(): Promise<TreatmentPlan[]> {
+  const data = await AsyncStorage.getItem(STORAGE_KEYS.TREATMENT_PLANS);
+  return data ? JSON.parse(data) : [];
+}
+
+export async function saveTreatmentPlans(plans: TreatmentPlan[]): Promise<void> {
+  await AsyncStorage.setItem(STORAGE_KEYS.TREATMENT_PLANS, JSON.stringify(plans));
+}
+
 export async function isOnboarded(): Promise<boolean> {
   const val = await AsyncStorage.getItem(STORAGE_KEYS.ONBOARDED);
   return val === 'true';
@@ -96,12 +106,13 @@ export async function setOnboarded(): Promise<void> {
 // --- Bulk data ---
 
 export async function getAllData(): Promise<AppData> {
-  const [doctor, patients, appointments, payments, patientFiles] = await Promise.all([
+  const [doctor, patients, appointments, payments, patientFiles, treatmentPlans] = await Promise.all([
     getDoctor(),
     getPatients(),
     getAppointments(),
     getPayments(),
     getPatientFiles(),
+    getTreatmentPlans(),
   ]);
   return {
     doctor: doctor!,
@@ -109,6 +120,7 @@ export async function getAllData(): Promise<AppData> {
     appointments,
     payments,
     patientFiles,
+    treatmentPlans,
   };
 }
 

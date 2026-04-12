@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
+
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +12,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Input from '../components/Input';
+import CustomAlert, { useAlert } from '../components/CustomAlert';
 import { colors, spacing, fontSize, borderRadius, shadow } from '../utils/theme';
 import { formatDate, getPatientName } from '../utils/helpers';
 import { wp } from '../utils/responsive';
@@ -33,6 +35,7 @@ export default function SettingsScreen() {
   const [editClinic, setEditClinic] = useState(doctor?.clinicName ?? '');
   const [editPhone, setEditPhone] = useState(doctor?.phone ?? '');
   const [exporting, setExporting] = useState(false);
+  const { alertConfig, showAlert, dismissAlert } = useAlert();
 
   const handleSaveProfile = async () => {
     if (!doctor) return;
@@ -165,7 +168,7 @@ export default function SettingsScreen() {
   };
 
   const clearData = () => {
-    Alert.alert(
+    showAlert(
       t('clearAllData'),
       language === 'ar'
         ? 'هل أنت متأكد من حذف جميع البيانات؟ لا يمكن التراجع عن هذا.'
@@ -176,7 +179,7 @@ export default function SettingsScreen() {
           text: t('yes'),
           style: 'destructive',
           onPress: () => {
-            Alert.alert(
+            showAlert(
               language === 'ar' ? 'تأكيد نهائي' : 'Final Confirmation',
               language === 'ar'
                 ? 'سيتم حذف جميع المرضى والمواعيد والدفعات والإعدادات نهائياً. هل أنت متأكد تماماً؟'
@@ -190,7 +193,9 @@ export default function SettingsScreen() {
                     await storage.clearAllData();
                     await clearPasswordHash();
                     await refreshData();
-                    Alert.alert(t('done'), language === 'ar' ? 'تم مسح جميع البيانات.' : 'All data has been cleared.');
+                    showAlert(t('done'), language === 'ar' ? 'تم مسح جميع البيانات.' : 'All data has been cleared.', [
+                      { text: t('ok') },
+                    ]);
                   },
                 },
               ]
@@ -408,6 +413,8 @@ export default function SettingsScreen() {
       </Card>
 
       <View style={{ height: spacing.xl }} />
+
+      <CustomAlert {...alertConfig} onDismiss={dismissAlert} />
     </ScrollView>
   );
 }

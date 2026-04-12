@@ -45,6 +45,17 @@ export interface Appointment {
   additionalExpenses: ExpenseItem[];
   amountPaid: number;
   notes?: string;
+  treatmentPlanId?: string;
+  createdAt: string;
+}
+
+export interface TreatmentPlan {
+  id: string;
+  patientId: string;
+  name: string;
+  toothNumbers: number[];
+  status: 'active' | 'completed';
+  notes?: string;
   createdAt: string;
 }
 
@@ -82,6 +93,7 @@ export interface AppData {
   appointments: Appointment[];
   payments: Payment[];
   patientFiles: PatientFile[];
+  treatmentPlans: TreatmentPlan[];
 }
 
 export interface ExportData extends AppData {

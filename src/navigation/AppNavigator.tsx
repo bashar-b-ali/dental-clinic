@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import React, { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
+import { ActivityIndicator, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import PagerView from 'react-native-pager-view';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useData } from '../context/DataContext';
 import { useLanguage } from '../i18n/LanguageContext';
 import { hasPassword as checkHasPassword } from '../utils/auth';
-import { colors, fontSize } from '../utils/theme';
+import { colors, fontSize, spacing, borderRadius } from '../utils/theme';
 
 import OnboardingScreen from '../screens/OnboardingScreen';
 import SetPasswordScreen from '../screens/SetPasswordScreen';
@@ -27,7 +28,6 @@ import PatientFilesScreen from '../screens/PatientFilesScreen';
 import FileViewerScreen from '../screens/FileViewerScreen';
 
 const Stack = createStackNavigator();
-const Tab = createBottomTabNavigator();
 
 // Context so Settings can trigger password change
 const PasswordActionContext = createContext<{
@@ -38,42 +38,81 @@ export function usePasswordAction() {
   return useContext(PasswordActionContext);
 }
 
+interface TabDef {
+  name: string;
+  icon: string;
+  iconFocused: string;
+  label: string;
+  Component: React.ComponentType<any>;
+}
+
 function MainTabs() {
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
+  const insets = useSafeAreaInsets();
+  const pagerRef = useRef<PagerView>(null);
+  const [currentPage, setCurrentPage] = useState(0);
+
+  const tabs: TabDef[] = [
+    { name: 'Dashboard', icon: 'home-outline', iconFocused: 'home', label: t('tab_dashboard'), Component: DashboardScreen },
+    { name: 'Patients', icon: 'people-outline', iconFocused: 'people', label: t('tab_patients'), Component: PatientsScreen },
+    { name: 'Appointments', icon: 'calendar-outline', iconFocused: 'calendar', label: t('tab_appointments'), Component: AppointmentsScreen },
+    { name: 'Billing', icon: 'wallet-outline', iconFocused: 'wallet', label: t('tab_billing'), Component: BillingScreen },
+    { name: 'Settings', icon: 'settings-outline', iconFocused: 'settings', label: t('tab_settings'), Component: SettingsScreen },
+  ];
+
+  const handleTabPress = (index: number) => {
+    pagerRef.current?.setPage(index);
+    setCurrentPage(index);
+  };
 
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap = 'home';
-          if (route.name === 'Dashboard') iconName = focused ? 'home' : 'home-outline';
-          else if (route.name === 'Patients') iconName = focused ? 'people' : 'people-outline';
-          else if (route.name === 'Appointments') iconName = focused ? 'calendar' : 'calendar-outline';
-          else if (route.name === 'Billing') iconName = focused ? 'wallet' : 'wallet-outline';
-          else if (route.name === 'Settings') iconName = focused ? 'settings' : 'settings-outline';
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: {
-          backgroundColor: colors.card,
-          borderTopColor: colors.border,
-          paddingBottom: 4,
-          height: 60,
-        },
-        tabBarLabelStyle: {
-          fontSize: fontSize.xs,
-          fontWeight: '600',
-        },
-        headerShown: false,
-      })}
-    >
-      <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ tabBarLabel: t('tab_dashboard') }} />
-      <Tab.Screen name="Patients" component={PatientsScreen} options={{ tabBarLabel: t('tab_patients') }} />
-      <Tab.Screen name="Appointments" component={AppointmentsScreen} options={{ tabBarLabel: t('tab_appointments') }} />
-      <Tab.Screen name="Billing" component={BillingScreen} options={{ tabBarLabel: t('tab_billing') }} />
-      <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarLabel: t('tab_settings') }} />
-    </Tab.Navigator>
+    <View style={styles.tabContainer}>
+      <PagerView
+        ref={pagerRef}
+        style={styles.pager}
+        initialPage={0}
+        onPageSelected={(e) => setCurrentPage(e.nativeEvent.position)}
+        overdrag
+      >
+        {tabs.map((tab) => (
+          <View key={tab.name} style={styles.page}>
+            <tab.Component />
+          </View>
+        ))}
+      </PagerView>
+
+      {/* Custom Bottom Tab Bar */}
+      <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 4) }]}>
+        {tabs.map((tab, index) => {
+          const isFocused = currentPage === index;
+          return (
+            <TouchableOpacity
+              key={tab.name}
+              style={styles.tabItem}
+              onPress={() => handleTabPress(index)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.tabIconWrapper, isFocused && styles.tabIconWrapperActive]}>
+                <Ionicons
+                  name={(isFocused ? tab.iconFocused : tab.icon) as any}
+                  size={22}
+                  color={isFocused ? colors.primary : colors.textMuted}
+                />
+              </View>
+              <Text
+                style={[
+                  styles.tabLabel,
+                  isFocused && styles.tabLabelActive,
+                ]}
+                numberOfLines={1}
+              >
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
@@ -191,3 +230,48 @@ export default function AppNavigator() {
     </PasswordActionContext.Provider>
   );
 }
+
+const styles = StyleSheet.create({
+  tabContainer: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  pager: {
+    flex: 1,
+  },
+  page: {
+    flex: 1,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: colors.card,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 4,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
+  tabIconWrapper: {
+    width: 40,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabIconWrapperActive: {
+    backgroundColor: colors.primaryBg,
+  },
+  tabLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  tabLabelActive: {
+    color: colors.primary,
+  },
+});

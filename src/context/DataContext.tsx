@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Doctor, Patient, Appointment, Payment, PatientFile, ExportData } from '../types';
+import { Doctor, Patient, Appointment, Payment, PatientFile, ExportData, TreatmentPlan } from '../types';
 import * as storage from '../utils/storage';
 import { generateId } from '../utils/helpers';
 
@@ -9,6 +9,7 @@ interface DataContextType {
   appointments: Appointment[];
   payments: Payment[];
   patientFiles: PatientFile[];
+  treatmentPlans: TreatmentPlan[];
   isLoading: boolean;
   isOnboarded: boolean;
 
@@ -24,6 +25,9 @@ interface DataContextType {
   addPatientFile: (file: Omit<PatientFile, 'id' | 'createdAt'>) => Promise<PatientFile>;
   updatePatientFile: (file: PatientFile) => Promise<void>;
   deletePatientFile: (id: string) => Promise<void>;
+  addTreatmentPlan: (plan: Omit<TreatmentPlan, 'id' | 'createdAt'>) => Promise<TreatmentPlan>;
+  updateTreatmentPlan: (plan: TreatmentPlan) => Promise<void>;
+  deleteTreatmentPlan: (id: string) => Promise<void>;
   completeOnboarding: () => Promise<void>;
   importData: (data: any) => Promise<void>;
   mergeData: (data: ExportData) => Promise<{ patientsAdded: number; appointmentsAdded: number; paymentsAdded: number; filesAdded: number }>;
@@ -38,17 +42,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [payments, setPaymentsState] = useState<Payment[]>([]);
   const [patientFiles, setPatientFiles] = useState<PatientFile[]>([]);
+  const [treatmentPlans, setTreatmentPlans] = useState<TreatmentPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isOnboarded, setIsOnboarded] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
-      const [doc, pats, apts, pays, files, onboarded] = await Promise.all([
+      const [doc, pats, apts, pays, files, plans, onboarded] = await Promise.all([
         storage.getDoctor(),
         storage.getPatients(),
         storage.getAppointments(),
         storage.getPayments(),
         storage.getPatientFiles(),
+        storage.getTreatmentPlans(),
         storage.isOnboarded(),
       ]);
       setDoctorState(doc);
@@ -56,6 +62,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setAppointments(apts);
       setPaymentsState(pays);
       setPatientFiles(files);
+      setTreatmentPlans(plans);
       setIsOnboarded(onboarded);
     } finally {
       setIsLoading(false);
@@ -157,6 +164,26 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setPatientFiles(updated);
   };
 
+  const addTreatmentPlan = async (data: Omit<TreatmentPlan, 'id' | 'createdAt'>) => {
+    const plan: TreatmentPlan = { ...data, id: generateId(), createdAt: new Date().toISOString() };
+    const updated = [...treatmentPlans, plan];
+    await storage.saveTreatmentPlans(updated);
+    setTreatmentPlans(updated);
+    return plan;
+  };
+
+  const updateTreatmentPlan = async (plan: TreatmentPlan) => {
+    const updated = treatmentPlans.map((p) => (p.id === plan.id ? plan : p));
+    await storage.saveTreatmentPlans(updated);
+    setTreatmentPlans(updated);
+  };
+
+  const deleteTreatmentPlan = async (id: string) => {
+    const updated = treatmentPlans.filter((p) => p.id !== id);
+    await storage.saveTreatmentPlans(updated);
+    setTreatmentPlans(updated);
+  };
+
   const completeOnboarding = async () => {
     await storage.setOnboarded();
     setIsOnboarded(true);
@@ -185,6 +212,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         appointments,
         payments,
         patientFiles,
+        treatmentPlans,
         isLoading,
         isOnboarded,
         setDoctor,
@@ -199,6 +227,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         addPatientFile,
         updatePatientFile,
         deletePatientFile,
+        addTreatmentPlan,
+        updateTreatmentPlan,
+        deleteTreatmentPlan,
         completeOnboarding,
         importData,
         mergeData,

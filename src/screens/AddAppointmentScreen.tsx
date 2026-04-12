@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, KeyboardAvoidingView, Platform, Modal, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Modal, FlatList, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useData } from '../context/DataContext';
@@ -9,9 +9,11 @@ import Button from '../components/Button';
 import Card from '../components/Card';
 import ToothChart from '../components/ToothChart';
 import DatePicker from '../components/DatePicker';
+import TimePicker from '../components/TimePicker';
+import CustomAlert, { useAlert } from '../components/CustomAlert';
 import { colors, spacing, fontSize, borderRadius } from '../utils/theme';
 import { Appointment, ToothWork, MaterialUsed, ExpenseItem } from '../types';
-import { getToday, DENTAL_PROCEDURES, COMMON_MATERIALS, formatCurrency } from '../utils/helpers';
+import { getToday, DENTAL_PROCEDURES, COMMON_MATERIALS, formatCurrency, translateProcedure, translateMaterial, getPatientName } from '../utils/helpers';
 
 function getCurrentTime(): string {
   const now = new Date();
@@ -23,8 +25,9 @@ function getCurrentTime(): string {
 export default function AddAppointmentScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { patients, addAppointment, updateAppointment } = useData();
-  const { t } = useLanguage();
+  const { patients, appointments, addAppointment, updateAppointment, treatmentPlans, addTreatmentPlan } = useData();
+  const { t, language, isRTL } = useLanguage();
+  const { alertConfig, showAlert, dismissAlert } = useAlert();
 
   const editingAppointment: Appointment | undefined = route.params?.appointment;
   const isEditing = !!editingAppointment;
@@ -49,11 +52,15 @@ export default function AddAppointmentScreen() {
   // Procedure picker modal
   const [procedureModalVisible, setProcedureModalVisible] = useState(false);
   const [procedureModalToothIndex, setProcedureModalToothIndex] = useState(-1);
+  const [customProcedureInput, setCustomProcedureInput] = useState('');
+  const [showCustomProcedure, setShowCustomProcedure] = useState(false);
 
   // Materials
   const [materialsUsed, setMaterialsUsed] = useState<MaterialUsed[]>([]);
   const [materialModalVisible, setMaterialModalVisible] = useState(false);
   const [materialModalIndex, setMaterialModalIndex] = useState(-1);
+  const [customMaterialInput, setCustomMaterialInput] = useState('');
+  const [showCustomMaterial, setShowCustomMaterial] = useState(false);
 
   // Fees
   const [procedureFee, setProcedureFee] = useState('');
@@ -66,6 +73,12 @@ export default function AddAppointmentScreen() {
   // Payment & notes
   const [amountPaid, setAmountPaid] = useState('');
   const [notes, setNotes] = useState('');
+
+  // Treatment plan
+  const [treatmentPlanId, setTreatmentPlanId] = useState<string | undefined>(undefined);
+  const [treatmentModalVisible, setTreatmentModalVisible] = useState(false);
+  const [newPlanName, setNewPlanName] = useState('');
+  const [showNewPlanInput, setShowNewPlanInput] = useState(false);
 
   const [saving, setSaving] = useState(false);
 
@@ -84,6 +97,7 @@ export default function AddAppointmentScreen() {
       setAdditionalExpenses(editingAppointment.additionalExpenses);
       setAmountPaid(editingAppointment.amountPaid.toString());
       setNotes(editingAppointment.notes ?? '');
+      setTreatmentPlanId(editingAppointment.treatmentPlanId);
     } else {
       if (route.params?.patientId) setPatientId(route.params.patientId);
       if (route.params?.date) setDate(route.params.date);
@@ -106,6 +120,11 @@ export default function AddAppointmentScreen() {
     const q = patientSearch.toLowerCase();
     return p.name.toLowerCase().includes(q) || (p.phone ?? '').includes(q);
   });
+
+  // Active treatment plans for selected patient
+  const patientPlans = treatmentPlans.filter(
+    (p) => p.patientId === patientId && p.status === 'active'
+  );
 
   // Calculations
   const materialsCost = materialsUsed.reduce((sum, m) => sum + m.quantity * m.unitCost, 0);
@@ -156,16 +175,22 @@ export default function AddAppointmentScreen() {
     setAdditionalExpenses((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSave = async () => {
-    if (!patientId) {
-      Alert.alert(t('error'), t('pleaseSelectPatient'));
-      return;
+  // Check for time conflicts
+  const checkConflict = (): { hasConflict: boolean; conflictPatient: string } => {
+    const conflicting = appointments.find(
+      (a) =>
+        a.date === date &&
+        a.time === time &&
+        a.status !== 'cancelled' &&
+        a.id !== editingAppointment?.id
+    );
+    if (conflicting) {
+      return { hasConflict: true, conflictPatient: getPatientName(conflicting.patientId, patients) };
     }
-    if (!date) {
-      Alert.alert(t('error'), t('pleaseEnterDate'));
-      return;
-    }
+    return { hasConflict: false, conflictPatient: '' };
+  };
 
+  const doSave = async () => {
     setSaving(true);
     try {
       const appointmentData = {
@@ -181,6 +206,7 @@ export default function AddAppointmentScreen() {
         additionalExpenses,
         amountPaid: parseFloat(amountPaid) || 0,
         notes: notes || undefined,
+        treatmentPlanId: treatmentPlanId || undefined,
       };
 
       if (isEditing && editingAppointment) {
@@ -194,10 +220,52 @@ export default function AddAppointmentScreen() {
 
       navigation.goBack();
     } catch (err) {
-      Alert.alert(t('error'), t('failedToSave'));
+      showAlert(t('error'), t('failedToSave'), [{ text: t('ok') }]);
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSave = async () => {
+    if (!patientId) {
+      showAlert(t('error'), t('pleaseSelectPatient'), [{ text: t('ok') }]);
+      return;
+    }
+    if (!date) {
+      showAlert(t('error'), t('pleaseEnterDate'), [{ text: t('ok') }]);
+      return;
+    }
+
+    // Check for time conflicts
+    const { hasConflict, conflictPatient } = checkConflict();
+    if (hasConflict) {
+      showAlert(
+        t('timeConflict'),
+        t('timeConflictMsg').replace('{patient}', conflictPatient),
+        [
+          { text: t('cancel'), style: 'cancel' },
+          { text: t('continueAnyway'), onPress: doSave },
+        ],
+        { icon: 'alert-circle-outline', iconColor: colors.warning }
+      );
+      return;
+    }
+
+    await doSave();
+  };
+
+  const handleCreatePlan = async () => {
+    if (!newPlanName.trim()) return;
+    const plan = await addTreatmentPlan({
+      patientId,
+      name: newPlanName.trim(),
+      toothNumbers: selectedTeeth,
+      status: 'active',
+    });
+    setTreatmentPlanId(plan.id);
+    setNewPlanName('');
+    setShowNewPlanInput(false);
+    setTreatmentModalVisible(false);
   };
 
   const expenseCategories: ExpenseItem['category'][] = ['material', 'rental', 'lab', 'other'];
@@ -216,6 +284,8 @@ export default function AddAppointmentScreen() {
       <Text style={styles.sectionTitle}>{t(titleKey)}</Text>
     </View>
   );
+
+  const selectedPlanName = treatmentPlans.find((p) => p.id === treatmentPlanId)?.name;
 
   return (
     <KeyboardAvoidingView
@@ -250,7 +320,7 @@ export default function AddAppointmentScreen() {
                 )}
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={20} color={colors.textMuted} />
           </TouchableOpacity>
         </Card>
 
@@ -258,15 +328,12 @@ export default function AddAppointmentScreen() {
         <Card>
           {renderSectionHeader('sectionSchedule', 'calendar-outline')}
           <DatePicker selectedDate={date} onSelectDate={setDate} />
-          <View style={[styles.row, { marginTop: spacing.md }]}>
-            <View style={styles.halfField}>
-              <Input
-                label={t('timeLabel')}
-                value={time}
-                onChangeText={setTime}
-                placeholder="09:30"
-              />
-            </View>
+          <View style={{ marginTop: spacing.md }}>
+            <TimePicker
+              label={t('timeLabel')}
+              value={time}
+              onChange={setTime}
+            />
           </View>
         </Card>
 
@@ -296,6 +363,37 @@ export default function AddAppointmentScreen() {
           <ToothChart selectedTeeth={selectedTeeth} onToggleTooth={handleToggleTooth} />
         </Card>
 
+        {/* Treatment Plan Link */}
+        {patientId && selectedTeeth.length > 0 && (
+          <Card>
+            {renderSectionHeader('linkToTreatment', 'clipboard-outline')}
+            <TouchableOpacity
+              style={styles.selector}
+              onPress={() => {
+                setShowNewPlanInput(false);
+                setTreatmentModalVisible(true);
+              }}
+            >
+              <View style={styles.selectorContent}>
+                <Ionicons
+                  name={treatmentPlanId ? 'document-text' : 'document-text-outline'}
+                  size={22}
+                  color={treatmentPlanId ? colors.primary : colors.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.selectorValue,
+                    !treatmentPlanId && styles.selectorPlaceholder,
+                  ]}
+                >
+                  {selectedPlanName ?? t('linkToTreatment')}
+                </Text>
+              </View>
+              <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          </Card>
+        )}
+
         {/* Teeth Work Details */}
         {teethWork.length > 0 && (
           <Card>
@@ -310,6 +408,8 @@ export default function AddAppointmentScreen() {
                     style={styles.pickerButton}
                     onPress={() => {
                       setProcedureModalToothIndex(index);
+                      setShowCustomProcedure(false);
+                      setCustomProcedureInput('');
                       setProcedureModalVisible(true);
                     }}
                   >
@@ -320,7 +420,9 @@ export default function AddAppointmentScreen() {
                       ]}
                       numberOfLines={1}
                     >
-                      {tw.procedure || t('selectProcedure')}
+                      {tw.procedure
+                        ? translateProcedure(tw.procedure, language)
+                        : t('selectProcedure')}
                     </Text>
                     <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
                   </TouchableOpacity>
@@ -346,6 +448,8 @@ export default function AddAppointmentScreen() {
                   style={[styles.pickerButton, styles.materialPicker]}
                   onPress={() => {
                     setMaterialModalIndex(index);
+                    setShowCustomMaterial(false);
+                    setCustomMaterialInput('');
                     setMaterialModalVisible(true);
                   }}
                 >
@@ -356,7 +460,9 @@ export default function AddAppointmentScreen() {
                     ]}
                     numberOfLines={1}
                   >
-                    {mat.name || t('selectMaterial')}
+                    {mat.name
+                      ? translateMaterial(mat.name, language)
+                      : t('selectMaterial')}
                   </Text>
                   <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
                 </TouchableOpacity>
@@ -638,46 +744,92 @@ export default function AddAppointmentScreen() {
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
-            <FlatList
-              data={DENTAL_PROCEDURES}
-              keyExtractor={(item) => item}
-              renderItem={({ item }) => {
-                const isSelected =
-                  procedureModalToothIndex >= 0 &&
-                  teethWork[procedureModalToothIndex]?.procedure === item;
-                return (
+            {!showCustomProcedure ? (
+              <>
+                <FlatList
+                  data={DENTAL_PROCEDURES}
+                  keyExtractor={(item) => item}
+                  renderItem={({ item }) => {
+                    const isSelected =
+                      procedureModalToothIndex >= 0 &&
+                      teethWork[procedureModalToothIndex]?.procedure === item;
+                    return (
+                      <TouchableOpacity
+                        style={[
+                          styles.optionItem,
+                          isSelected && styles.optionItemSelected,
+                        ]}
+                        onPress={() => {
+                          if (procedureModalToothIndex >= 0) {
+                            updateToothWork(procedureModalToothIndex, 'procedure', item);
+                          }
+                          setProcedureModalVisible(false);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.optionText,
+                            isSelected && styles.optionTextSelected,
+                          ]}
+                        >
+                          {translateProcedure(item, language)}
+                        </Text>
+                        {isSelected && (
+                          <Ionicons
+                            name="checkmark"
+                            size={20}
+                            color={colors.primary}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  }}
+                  style={styles.modalList}
+                />
+                <TouchableOpacity
+                  style={styles.customOptionButton}
+                  onPress={() => setShowCustomProcedure(true)}
+                >
+                  <Ionicons name="create-outline" size={18} color={colors.primary} />
+                  <Text style={styles.customOptionText}>{t('addCustomProcedure')}</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View style={styles.customInputContainer}>
+                <TextInput
+                  style={styles.customInput}
+                  value={customProcedureInput}
+                  onChangeText={setCustomProcedureInput}
+                  placeholder={t('customProcedurePlaceholder')}
+                  placeholderTextColor={colors.textMuted}
+                  autoFocus
+                />
+                <View style={styles.customInputButtons}>
                   <TouchableOpacity
-                    style={[
-                      styles.optionItem,
-                      isSelected && styles.optionItemSelected,
-                    ]}
+                    style={styles.customCancelBtn}
                     onPress={() => {
-                      if (procedureModalToothIndex >= 0) {
-                        updateToothWork(procedureModalToothIndex, 'procedure', item);
-                      }
-                      setProcedureModalVisible(false);
+                      setShowCustomProcedure(false);
+                      setCustomProcedureInput('');
                     }}
                   >
-                    <Text
-                      style={[
-                        styles.optionText,
-                        isSelected && styles.optionTextSelected,
-                      ]}
-                    >
-                      {item}
-                    </Text>
-                    {isSelected && (
-                      <Ionicons
-                        name="checkmark"
-                        size={20}
-                        color={colors.primary}
-                      />
-                    )}
+                    <Text style={styles.customCancelText}>{t('cancel')}</Text>
                   </TouchableOpacity>
-                );
-              }}
-              style={styles.modalList}
-            />
+                  <TouchableOpacity
+                    style={[styles.customConfirmBtn, !customProcedureInput.trim() && styles.customConfirmDisabled]}
+                    onPress={() => {
+                      if (customProcedureInput.trim() && procedureModalToothIndex >= 0) {
+                        updateToothWork(procedureModalToothIndex, 'procedure', customProcedureInput.trim());
+                        setCustomProcedureInput('');
+                        setShowCustomProcedure(false);
+                        setProcedureModalVisible(false);
+                      }
+                    }}
+                  >
+                    <Text style={styles.customConfirmText}>{t('add')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -692,58 +844,92 @@ export default function AddAppointmentScreen() {
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
-            <FlatList
-              data={COMMON_MATERIALS}
-              keyExtractor={(item) => item}
-              renderItem={({ item }) => {
-                const isSelected =
-                  materialModalIndex >= 0 &&
-                  materialsUsed[materialModalIndex]?.name === item;
-                return (
+            {!showCustomMaterial ? (
+              <>
+                <FlatList
+                  data={COMMON_MATERIALS}
+                  keyExtractor={(item) => item}
+                  renderItem={({ item }) => {
+                    const isSelected =
+                      materialModalIndex >= 0 &&
+                      materialsUsed[materialModalIndex]?.name === item;
+                    return (
+                      <TouchableOpacity
+                        style={[
+                          styles.optionItem,
+                          isSelected && styles.optionItemSelected,
+                        ]}
+                        onPress={() => {
+                          if (materialModalIndex >= 0) {
+                            updateMaterial(materialModalIndex, 'name', item);
+                          }
+                          setMaterialModalVisible(false);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.optionText,
+                            isSelected && styles.optionTextSelected,
+                          ]}
+                        >
+                          {translateMaterial(item, language)}
+                        </Text>
+                        {isSelected && (
+                          <Ionicons
+                            name="checkmark"
+                            size={20}
+                            color={colors.primary}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  }}
+                  style={styles.modalList}
+                />
+                <TouchableOpacity
+                  style={styles.customOptionButton}
+                  onPress={() => setShowCustomMaterial(true)}
+                >
+                  <Ionicons name="create-outline" size={18} color={colors.primary} />
+                  <Text style={styles.customOptionText}>{t('addCustomMaterial')}</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View style={styles.customInputContainer}>
+                <TextInput
+                  style={styles.customInput}
+                  value={customMaterialInput}
+                  onChangeText={setCustomMaterialInput}
+                  placeholder={t('customMaterialPlaceholder')}
+                  placeholderTextColor={colors.textMuted}
+                  autoFocus
+                />
+                <View style={styles.customInputButtons}>
                   <TouchableOpacity
-                    style={[
-                      styles.optionItem,
-                      isSelected && styles.optionItemSelected,
-                    ]}
+                    style={styles.customCancelBtn}
                     onPress={() => {
-                      if (materialModalIndex >= 0) {
-                        updateMaterial(materialModalIndex, 'name', item);
-                      }
-                      setMaterialModalVisible(false);
+                      setShowCustomMaterial(false);
+                      setCustomMaterialInput('');
                     }}
                   >
-                    <Text
-                      style={[
-                        styles.optionText,
-                        isSelected && styles.optionTextSelected,
-                      ]}
-                    >
-                      {item}
-                    </Text>
-                    {isSelected && (
-                      <Ionicons
-                        name="checkmark"
-                        size={20}
-                        color={colors.primary}
-                      />
-                    )}
+                    <Text style={styles.customCancelText}>{t('cancel')}</Text>
                   </TouchableOpacity>
-                );
-              }}
-              style={styles.modalList}
-            />
-            <TouchableOpacity
-              style={styles.customOptionButton}
-              onPress={() => {
-                setMaterialModalVisible(false);
-                if (materialModalIndex >= 0) {
-                  updateMaterial(materialModalIndex, 'name', '');
-                }
-              }}
-            >
-              <Ionicons name="create-outline" size={18} color={colors.primary} />
-              <Text style={styles.customOptionText}>{t('enterCustomName')}</Text>
-            </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.customConfirmBtn, !customMaterialInput.trim() && styles.customConfirmDisabled]}
+                    onPress={() => {
+                      if (customMaterialInput.trim() && materialModalIndex >= 0) {
+                        updateMaterial(materialModalIndex, 'name', customMaterialInput.trim());
+                        setCustomMaterialInput('');
+                        setShowCustomMaterial(false);
+                        setMaterialModalVisible(false);
+                      }
+                    }}
+                  >
+                    <Text style={styles.customConfirmText}>{t('add')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -795,6 +981,104 @@ export default function AddAppointmentScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ---- Treatment Plan Modal ---- */}
+      <Modal visible={treatmentModalVisible} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainerSmall}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('linkToTreatment')}</Text>
+              <TouchableOpacity onPress={() => setTreatmentModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* None option */}
+            <TouchableOpacity
+              style={[styles.optionItem, !treatmentPlanId && styles.optionItemSelected]}
+              onPress={() => {
+                setTreatmentPlanId(undefined);
+                setTreatmentModalVisible(false);
+              }}
+            >
+              <Text style={[styles.optionText, !treatmentPlanId && styles.optionTextSelected]}>—</Text>
+              {!treatmentPlanId && <Ionicons name="checkmark" size={20} color={colors.primary} />}
+            </TouchableOpacity>
+
+            {/* Existing plans */}
+            {patientPlans.map((plan) => {
+              const isSelected = treatmentPlanId === plan.id;
+              const sessionCount = appointments.filter((a) => a.treatmentPlanId === plan.id).length;
+              return (
+                <TouchableOpacity
+                  key={plan.id}
+                  style={[styles.optionItem, isSelected && styles.optionItemSelected]}
+                  onPress={() => {
+                    setTreatmentPlanId(plan.id);
+                    setTreatmentModalVisible(false);
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
+                      {plan.name}
+                    </Text>
+                    <Text style={styles.planMeta}>
+                      {plan.toothNumbers.map((n) => `#${n}`).join(', ')} · {sessionCount} {sessionCount === 1 ? t('session') : t('sessions')}
+                    </Text>
+                  </View>
+                  {isSelected && <Ionicons name="checkmark" size={20} color={colors.primary} />}
+                </TouchableOpacity>
+              );
+            })}
+
+            {patientPlans.length === 0 && !showNewPlanInput && (
+              <Text style={styles.emptyText}>{t('noActivePlans')}</Text>
+            )}
+
+            {/* New plan input */}
+            {showNewPlanInput ? (
+              <View style={styles.customInputContainer}>
+                <TextInput
+                  style={styles.customInput}
+                  value={newPlanName}
+                  onChangeText={setNewPlanName}
+                  placeholder={t('treatmentNamePlaceholder')}
+                  placeholderTextColor={colors.textMuted}
+                  autoFocus
+                />
+                <View style={styles.customInputButtons}>
+                  <TouchableOpacity
+                    style={styles.customCancelBtn}
+                    onPress={() => {
+                      setShowNewPlanInput(false);
+                      setNewPlanName('');
+                    }}
+                  >
+                    <Text style={styles.customCancelText}>{t('cancel')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.customConfirmBtn, !newPlanName.trim() && styles.customConfirmDisabled]}
+                    onPress={handleCreatePlan}
+                  >
+                    <Text style={styles.customConfirmText}>{t('add')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.customOptionButton}
+                onPress={() => setShowNewPlanInput(true)}
+              >
+                <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
+                <Text style={styles.customOptionText}>{t('newPlan')}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onDismiss={dismissAlert} />
     </KeyboardAvoidingView>
   );
 }
@@ -1100,6 +1384,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
+    marginHorizontal: spacing.md,
   },
   optionItemSelected: {
     backgroundColor: colors.primaryBg,
@@ -1112,6 +1397,11 @@ const styles = StyleSheet.create({
   optionTextSelected: {
     fontWeight: '700',
     color: colors.primary,
+  },
+  planMeta: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 
   // Custom option
@@ -1129,5 +1419,54 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: '600',
     color: colors.primary,
+  },
+
+  // Custom input for procedures/materials
+  customInputContainer: {
+    padding: spacing.md,
+  },
+  customInput: {
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 4,
+    fontSize: fontSize.md,
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  customInputButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  customCancelBtn: {
+    flex: 1,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    backgroundColor: colors.borderLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  customCancelText: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  customConfirmBtn: {
+    flex: 1,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+  },
+  customConfirmDisabled: {
+    opacity: 0.5,
+  },
+  customConfirmText: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.textOnPrimary,
   },
 });

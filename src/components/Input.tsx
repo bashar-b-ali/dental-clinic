@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TextInput, StyleSheet, TextInputProps } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TextInputProps, I18nManager } from 'react-native';
 import { colors, borderRadius, spacing, fontSize } from '../utils/theme';
 
 interface InputProps extends TextInputProps {
@@ -8,15 +8,18 @@ interface InputProps extends TextInputProps {
 }
 
 export default function Input({ label, error, style, ...props }: InputProps) {
+  const isRTL = I18nManager.isRTL;
+
   return (
     <View style={styles.container}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && <Text style={[styles.label, isRTL && styles.rtlText]}>{label}</Text>}
       <TextInput
-        style={[styles.input, error && styles.inputError, style]}
+        style={[styles.input, isRTL && styles.rtlInput, error && styles.inputError, style]}
         placeholderTextColor={colors.textMuted}
+        textAlign={isRTL ? 'right' : 'left'}
         {...props}
       />
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && <Text style={[styles.error, isRTL && styles.rtlText]}>{error}</Text>}
     </View>
   );
 }
@@ -31,6 +34,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.xs,
   },
+  rtlText: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
   input: {
     backgroundColor: colors.card,
     borderWidth: 1,
@@ -40,6 +47,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 4,
     fontSize: fontSize.md,
     color: colors.text,
+  },
+  rtlInput: {
+    writingDirection: 'rtl',
   },
   inputError: {
     borderColor: colors.danger,

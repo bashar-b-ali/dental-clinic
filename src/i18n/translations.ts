@@ -101,7 +101,7 @@ export const translations: Record<Language, Record<string, string>> = {
     sectionSummary: 'Total Summary',
     selectPatient: 'Select a patient',
     dateLabel: 'Date',
-    timeLabel: 'Time (HH:MM)',
+    timeLabel: 'Time',
     chiefComplaint: 'Chief Complaint',
     chiefComplaintPlaceholder: "Patient's main concern",
     diagnosis: 'Diagnosis',
@@ -382,6 +382,53 @@ export const translations: Record<Language, Record<string, string>> = {
     passwordSet: 'Your password has been set successfully.',
     passwordChanged: 'Your password has been changed successfully.',
     security: 'Security',
+
+    // Time Picker
+    selectTime: 'Select Time',
+    hour: 'Hour',
+    minute: 'Minute',
+
+    // Treatment Plans
+    treatmentPlans: 'Treatment Plans',
+    treatmentPlan: 'Treatment Plan',
+    newTreatmentPlan: 'New Treatment Plan',
+    activePlans: 'Active',
+    completedPlans: 'Completed',
+    sessions: 'sessions',
+    session: 'session',
+    noTreatmentPlans: 'No treatment plans yet',
+    createTreatmentPlan: 'Create Treatment Plan',
+    treatmentName: 'Treatment Name',
+    treatmentNamePlaceholder: 'e.g. Root Canal #14',
+    linkToTreatment: 'Link to Treatment Plan',
+    noActivePlans: 'No active plans',
+    newPlan: 'New Plan',
+    completePlan: 'Complete Plan',
+    reactivatePlan: 'Reactivate',
+    treatmentTeeth: 'Teeth',
+    treatmentSessions: 'Sessions',
+    markPlanComplete: 'Mark as Completed',
+    markPlanCompleteMsg: 'Mark this treatment plan as completed?',
+    markPlanActive: 'Mark as Active',
+    markPlanActiveMsg: 'Reactivate this treatment plan?',
+    confirm: 'Confirm',
+    deletePlan: 'Delete Plan',
+    deletePlanMsg: 'Delete this treatment plan? Linked appointments will be kept.',
+
+    // Custom entries
+    addCustomProcedure: 'Add Custom Procedure',
+    addCustomMaterial: 'Add Custom Material',
+    customProcedurePlaceholder: 'Enter procedure name',
+    customMaterialPlaceholder: 'Enter material name',
+
+    // Conflict
+    timeConflict: 'Time Conflict',
+    timeConflictMsg: 'There is already an appointment at this time with {patient}. Do you want to continue?',
+    continueAnyway: 'Continue Anyway',
+
+    // Restart
+    restartRequired: 'Restart Required',
+    restartMsg: 'Please restart the app to apply the layout direction change.',
   },
 
   ar: {
@@ -484,7 +531,7 @@ export const translations: Record<Language, Record<string, string>> = {
     sectionSummary: 'ملخص المجموع',
     selectPatient: 'اختر مريضاً',
     dateLabel: 'التاريخ',
-    timeLabel: 'الوقت (HH:MM)',
+    timeLabel: 'الوقت',
     chiefComplaint: 'الشكوى الرئيسية',
     chiefComplaintPlaceholder: 'شكوى المريض الأساسية',
     diagnosis: 'التشخيص',
@@ -765,5 +812,52 @@ export const translations: Record<Language, Record<string, string>> = {
     passwordSet: 'تم تعيين كلمة المرور بنجاح.',
     passwordChanged: 'تم تغيير كلمة المرور بنجاح.',
     security: 'الأمان',
+
+    // Time Picker
+    selectTime: 'اختيار الوقت',
+    hour: 'ساعة',
+    minute: 'دقيقة',
+
+    // Treatment Plans
+    treatmentPlans: 'خطط العلاج',
+    treatmentPlan: 'خطة علاج',
+    newTreatmentPlan: 'خطة علاج جديدة',
+    activePlans: 'ن��طة',
+    completedPlans: 'مكتملة',
+    sessions: 'ج��سات',
+    session: 'جلسة',
+    noTreatmentPlans: 'لا توجد خطط علاج بعد',
+    createTreatmentPlan: 'إنشاء خطة علاج',
+    treatmentName: 'اسم العلاج',
+    treatmentNamePlaceholder: 'مثال: علاج عصب سن #14',
+    linkToTreatment: 'ربط بخطة علاج',
+    noActivePlans: 'لا توجد خطط نش��ة',
+    newPlan: 'خطة جد��دة',
+    completePlan: 'إكمال الخطة',
+    reactivatePlan: 'إعادة تنشيط',
+    treatmentTeeth: 'الأسنان',
+    treatmentSessions: 'الجلسات',
+    markPlanComplete: 'تحديد كمكتمل',
+    markPlanCompleteMsg: 'هل تريد تحديد خطة العلاج كمكتملة؟',
+    markPlanActive: 'تحديد كنشطة',
+    markPlanActiveMsg: 'هل تريد إعادة تنشيط خطة العلاج؟',
+    confirm: 'تأكيد',
+    deletePlan: 'حذف الخطة',
+    deletePlanMsg: 'هل تريد حذف خطة العلاج؟ ستبقى المواعيد المرتبطة.',
+
+    // Custom entries
+    addCustomProcedure: 'إضافة إجراء مخصص',
+    addCustomMaterial: '��ضافة مادة مخصص��',
+    customProcedurePlaceholder: 'أدخل اسم الإجراء',
+    customMaterialPlaceholder: 'أدخل اسم المادة',
+
+    // Conflict
+    timeConflict: 'تعارض وقت',
+    timeConflictMsg: 'يوجد موعد في نفس الوقت مع {patient}. هل تريد المتابعة؟',
+    continueAnyway: 'متابعة',
+
+    // Restart
+    restartRequired: 'إعادة تشغيل مطلوبة',
+    restartMsg: 'يرجى إعادة تشغيل التطبيق لتطبيق تغيير اتجاه التصميم.',
   },
 };

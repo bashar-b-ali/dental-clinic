@@ -6,12 +6,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useData } from '../context/DataContext';
 import { useLanguage } from '../i18n/LanguageContext';
 import Card from '../components/Card';
+import Input from '../components/Input';
 import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
 import { colors, spacing, fontSize, borderRadius, shadow } from '../utils/theme';
 import { wp, ms } from '../utils/responsive';
 import { formatDate, formatCurrency, getToday, getPatientName, getAppointmentTotal } from '../utils/helpers';
-import { AppointmentStatus } from '../types';
 
 type FilterTab = 'all' | 'today' | 'upcoming' | 'completed';
 
@@ -21,6 +21,7 @@ export default function AppointmentsScreen() {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
+  const [search, setSearch] = useState('');
 
   const FILTERS: { key: FilterTab; label: string }[] = [
     { key: 'all', label: t('filterAll') },
@@ -29,20 +30,46 @@ export default function AppointmentsScreen() {
     { key: 'completed', label: t('filterCompleted') },
   ];
 
+  const today = getToday();
+
+  // Stats
+  const stats = useMemo(() => {
+    const todayCount = appointments.filter((a) => a.date === today && a.status !== 'cancelled').length;
+    const upcomingCount = appointments.filter((a) => a.date >= today && a.status === 'scheduled').length;
+    const completedCount = appointments.filter((a) => a.status === 'completed').length;
+    return { todayCount, upcomingCount, completedCount };
+  }, [appointments, today]);
+
   const filteredAppointments = useMemo(() => {
-    const today = getToday();
+    let result = appointments;
 
     switch (activeFilter) {
       case 'today':
-        return appointments.filter((a) => a.date === today);
+        result = result.filter((a) => a.date === today);
+        break;
       case 'upcoming':
-        return appointments.filter((a) => a.date >= today && a.status === 'scheduled');
+        result = result.filter((a) => a.date >= today && a.status === 'scheduled');
+        break;
       case 'completed':
-        return appointments.filter((a) => a.status === 'completed');
-      default:
-        return appointments;
+        result = result.filter((a) => a.status === 'completed');
+        break;
     }
-  }, [appointments, activeFilter]);
+
+    // Search filter
+    const query = search.toLowerCase().trim();
+    if (query) {
+      result = result.filter((a) => {
+        const patient = patients.find((p) => p.id === a.patientId);
+        if (!patient) return false;
+        return (
+          patient.name.toLowerCase().includes(query) ||
+          (patient.phone && patient.phone.toLowerCase().includes(query))
+        );
+      });
+    }
+
+    return result;
+  }, [appointments, patients, activeFilter, search, today]);
 
   const sections = useMemo(() => {
     const grouped: Record<string, typeof filteredAppointments> = {};
@@ -81,21 +108,6 @@ export default function AppointmentsScreen() {
     },
   };
 
-  const renderFilterTab = ({ item }: { item: (typeof FILTERS)[number] }) => {
-    const isActive = activeFilter === item.key;
-    return (
-      <TouchableOpacity
-        style={[styles.filterPill, isActive && styles.filterPillActive]}
-        onPress={() => setActiveFilter(item.key)}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
-          {item.label}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
-
   const renderSectionHeader = ({ section }: { section: { title: string } }) => (
     <View style={styles.sectionHeader}>
       <Ionicons name="calendar-outline" size={ms(14)} color={colors.textSecondary} />
@@ -105,7 +117,9 @@ export default function AppointmentsScreen() {
 
   const renderAppointmentCard = ({ item }: { item: (typeof appointments)[number] }) => {
     const patientName = getPatientName(item.patientId, patients);
+    const patient = patients.find((p) => p.id === item.patientId);
     const total = getAppointmentTotal(item);
+    const procedures = [...new Set(item.teethWork.map((tw) => tw.procedure).filter(Boolean))];
 
     return (
       <Card
@@ -113,22 +127,54 @@ export default function AppointmentsScreen() {
         style={styles.appointmentCard}
       >
         <View style={styles.cardTopRow}>
-          <View style={styles.cardTimeContainer}>
-            <Ionicons name="time-outline" size={ms(14)} color={colors.primary} />
-            <Text style={styles.cardTime}>{item.time}</Text>
+          <View style={styles.cardLeft}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {patientName.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.cardInfo}>
+              <Text style={styles.cardPatientName} numberOfLines={1}>
+                {patientName}
+              </Text>
+              {patient?.phone ? (
+                <View style={styles.inlineRow}>
+                  <Ionicons name="call-outline" size={ms(12)} color={colors.textMuted} />
+                  <Text style={styles.cardPhone}>{patient.phone}</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
           <StatusBadge status={item.status} />
         </View>
 
-        <Text style={styles.cardPatientName}>{patientName}</Text>
+        {/* Procedures chips */}
+        {procedures.length > 0 && (
+          <View style={styles.procedureRow}>
+            {procedures.slice(0, 3).map((proc) => (
+              <View key={proc} style={styles.procedureChip}>
+                <Text style={styles.procedureChipText}>{proc}</Text>
+              </View>
+            ))}
+            {procedures.length > 3 && (
+              <View style={styles.procedureChip}>
+                <Text style={styles.procedureChipText}>+{procedures.length - 3}</Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {item.chiefComplaint ? (
-          <Text style={styles.cardComplaint} numberOfLines={2}>
+          <Text style={styles.cardComplaint} numberOfLines={1}>
             {item.chiefComplaint}
           </Text>
         ) : null}
 
         <View style={styles.cardBottomRow}>
+          <View style={styles.cardTimeContainer}>
+            <Ionicons name="time-outline" size={ms(14)} color={colors.primary} />
+            <Text style={styles.cardTime}>{item.time}</Text>
+          </View>
           <View style={styles.cardTeethInfo}>
             {item.teethWork.length > 0 && (
               <>
@@ -145,27 +191,89 @@ export default function AppointmentsScreen() {
     );
   };
 
+  const appointmentNoun = appointments.length === 1 ? t('appointment') : t('tab_appointments');
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.filterContainer}>
-        <FlatList
-          data={FILTERS}
-          keyExtractor={(item) => item.key}
-          renderItem={renderFilterTab}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterList}
-        />
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>{t('tab_appointments')}</Text>
+        <Text style={styles.subtitle}>
+          {appointments.length} {appointmentNoun}
+        </Text>
       </View>
 
+      {/* Summary Stats */}
+      <View style={styles.statsRow}>
+        <View style={[styles.statBox, { backgroundColor: colors.primaryBg }]}>
+          <Text style={[styles.statLabel, { color: colors.primaryDark }]}>{t('filterToday')}</Text>
+          <Text style={[styles.statValue, { color: colors.primary }]}>{stats.todayCount}</Text>
+        </View>
+        <View style={[styles.statBox, { backgroundColor: colors.warningBg }]}>
+          <Text style={[styles.statLabel, { color: colors.warning }]}>{t('filterUpcoming')}</Text>
+          <Text style={[styles.statValue, { color: colors.warning }]}>{stats.upcomingCount}</Text>
+        </View>
+        <View style={[styles.statBox, { backgroundColor: colors.successBg }]}>
+          <Text style={[styles.statLabel, { color: colors.success }]}>{t('filterCompleted')}</Text>
+          <Text style={[styles.statValue, { color: colors.success }]}>{stats.completedCount}</Text>
+        </View>
+      </View>
+
+      {/* Filter Tabs */}
+      <View style={styles.filterRow}>
+        <View style={styles.pillGroup}>
+          {FILTERS.map((f) => (
+            <TouchableOpacity
+              key={f.key}
+              style={[styles.pill, activeFilter === f.key && styles.pillActive]}
+              onPress={() => setActiveFilter(f.key)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.pillText, activeFilter === f.key && styles.pillTextActive]}>
+                {f.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputWrapper}>
+          <Ionicons
+            name="search-outline"
+            size={ms(20)}
+            color={colors.textMuted}
+            style={styles.searchIcon}
+          />
+          <Input
+            placeholder={t('searchByNameOrPhone')}
+            value={search}
+            onChangeText={setSearch}
+            style={styles.searchInput}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
+      </View>
+
+      {/* Appointments List */}
       {sections.length === 0 ? (
-        <EmptyState
-          icon="calendar-outline"
-          title={emptyConfig[activeFilter].title}
-          message={emptyConfig[activeFilter].message}
-          actionLabel={t('addAppointment')}
-          onAction={() => navigation.navigate('AddAppointment')}
-        />
+        search.length > 0 ? (
+          <EmptyState
+            icon="search-outline"
+            title={t('noResults')}
+            message={`${t('noPatientFound')} "${search}"`}
+          />
+        ) : (
+          <EmptyState
+            icon="calendar-outline"
+            title={emptyConfig[activeFilter].title}
+            message={emptyConfig[activeFilter].message}
+            actionLabel={t('addAppointment')}
+            onAction={() => navigation.navigate('AddAppointment')}
+          />
+        )
       ) : (
         <SectionList
           sections={sections}
@@ -194,37 +302,90 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
-  filterContainer: {
-    backgroundColor: colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+  header: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  title: {
+    fontSize: fontSize.xxl,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  subtitle: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  statBox: {
+    flex: 1,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm + 2,
+    alignItems: 'center',
+  },
+  statLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  statValue: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+  },
+  filterRow: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  pillGroup: {
+    flexDirection: 'row',
+    backgroundColor: colors.borderLight,
+    borderRadius: borderRadius.full,
+    padding: wp(3),
+  },
+  pill: {
+    flex: 1,
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+  },
+  pillActive: {
+    backgroundColor: colors.primary,
     ...shadow.sm,
   },
-  filterList: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    gap: spacing.sm,
-  },
-  filterPill: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.borderLight,
-    marginRight: spacing.sm,
-  },
-  filterPillActive: {
-    backgroundColor: colors.primary,
-  },
-  filterPillText: {
-    fontSize: fontSize.sm,
+  pillText: {
+    fontSize: fontSize.xs,
     fontWeight: '600',
     color: colors.textSecondary,
   },
-  filterPillTextActive: {
+  pillTextActive: {
     color: colors.textOnPrimary,
   },
+  searchContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  searchInputWrapper: {
+    position: 'relative',
+  },
+  searchIcon: {
+    position: 'absolute',
+    left: spacing.md,
+    top: wp(14),
+    zIndex: 1,
+  },
+  searchInput: {
+    paddingLeft: wp(44),
+    marginBottom: 0,
+  },
   listContent: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingBottom: wp(100),
   },
   sectionHeader: {
@@ -250,27 +411,67 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.xs,
   },
-  cardTimeContainer: {
+  cardLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    flex: 1,
+    marginRight: spacing.sm,
   },
-  cardTime: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
+  avatar: {
+    width: wp(40),
+    height: wp(40),
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primaryBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  avatarText: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
     color: colors.primary,
+  },
+  cardInfo: {
+    flex: 1,
   },
   cardPatientName: {
     fontSize: fontSize.md,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: spacing.xs,
+  },
+  inlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  cardPhone: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+  },
+  procedureRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  procedureChip: {
+    backgroundColor: colors.primaryBg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: borderRadius.full,
+  },
+  procedureChipText: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    color: colors.primary,
   },
   cardComplaint: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
+    fontStyle: 'italic',
     marginBottom: spacing.sm,
-    lineHeight: 20,
   },
   cardBottomRow: {
     flexDirection: 'row',
@@ -280,6 +481,16 @@ const styles = StyleSheet.create({
     borderTopColor: colors.borderLight,
     paddingTop: spacing.sm,
     marginTop: spacing.xs,
+  },
+  cardTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  cardTime: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.primary,
   },
   cardTeethInfo: {
     flexDirection: 'row',
