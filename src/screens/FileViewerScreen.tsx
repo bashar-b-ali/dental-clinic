@@ -16,7 +16,13 @@ import {
   NativeScrollEvent,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { PinchGestureHandler, State as GestureState, PinchGestureHandlerStateChangeEvent, PinchGestureHandlerGestureEvent } from 'react-native-gesture-handler';
+import {
+  PinchGestureHandler,
+  PanGestureHandler,
+  State as GestureState,
+  PinchGestureHandlerStateChangeEvent,
+  PanGestureHandlerStateChangeEvent,
+} from 'react-native-gesture-handler';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Sharing from 'expo-sharing';
@@ -39,14 +45,33 @@ function getFileIcon(fileType: string): keyof typeof Ionicons.glyphMap {
   }
 }
 
-// Zoomable image component with pinch-to-zoom
+// Zoomable + pannable image component
 function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
+  const pinchRef = useRef<PinchGestureHandler>(null);
+  const panRef = useRef<PanGestureHandler>(null);
+
+  // Scale
   const baseScaleRef = useRef(1);
   const pinchScale = useRef(new Animated.Value(1)).current;
   const savedScale = useRef(new Animated.Value(1)).current;
   const displayScale = Animated.multiply(savedScale, pinchScale);
+
+  // Translation
+  const translateX = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const lastOffsetX = useRef(0);
+  const lastOffsetY = useRef(0);
+
   const lastTap = useRef(0);
 
+  const resetPosition = () => {
+    lastOffsetX.current = 0;
+    lastOffsetY.current = 0;
+    Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+    Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
+  };
+
+  // Pinch
   const onPinchEvent = Animated.event(
     [{ nativeEvent: { scale: pinchScale } }],
     { useNativeDriver: true },
@@ -62,11 +87,30 @@ function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
 
       if (clamped <= 1.05) {
         baseScaleRef.current = 1;
-        savedScale.setValue(1);
-        Animated.spring(savedScale, {
-          toValue: 1,
-          useNativeDriver: true,
-        }).start();
+        Animated.spring(savedScale, { toValue: 1, useNativeDriver: true }).start();
+        resetPosition();
+      }
+    }
+  };
+
+  // Pan
+  const onPanEvent = Animated.event(
+    [{ nativeEvent: { translationX: translateX, translationY: translateY } }],
+    { useNativeDriver: true },
+  );
+
+  const onPanStateChange = (event: PanGestureHandlerStateChangeEvent) => {
+    if (event.nativeEvent.oldState === GestureState.ACTIVE) {
+      if (baseScaleRef.current <= 1.05) {
+        // Not zoomed - snap back
+        resetPosition();
+      } else {
+        lastOffsetX.current += event.nativeEvent.translationX;
+        lastOffsetY.current += event.nativeEvent.translationY;
+        translateX.setOffset(lastOffsetX.current);
+        translateX.setValue(0);
+        translateY.setOffset(lastOffsetY.current);
+        translateY.setValue(0);
       }
     }
   };
@@ -78,16 +122,11 @@ function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
       pinchScale.setValue(1);
       if (baseScaleRef.current > 1.05) {
         baseScaleRef.current = 1;
-        Animated.spring(savedScale, {
-          toValue: 1,
-          useNativeDriver: true,
-        }).start();
+        Animated.spring(savedScale, { toValue: 1, useNativeDriver: true }).start();
+        resetPosition();
       } else {
         baseScaleRef.current = 2.5;
-        Animated.spring(savedScale, {
-          toValue: 2.5,
-          useNativeDriver: true,
-        }).start();
+        Animated.spring(savedScale, { toValue: 2.5, useNativeDriver: true }).start();
       }
       lastTap.current = 0;
     } else {
@@ -101,20 +140,46 @@ function ZoomableImage({ uri, onTap }: { uri: string; onTap: () => void }) {
   };
 
   return (
-    <PinchGestureHandler
-      onGestureEvent={onPinchEvent}
-      onHandlerStateChange={onPinchStateChange}
+    <PanGestureHandler
+      ref={panRef}
+      onGestureEvent={onPanEvent}
+      onHandlerStateChange={onPanStateChange}
+      simultaneousHandlers={pinchRef}
+      minPointers={1}
+      maxPointers={2}
+      activeOffsetX={[-10, 10]}
+      activeOffsetY={[-10, 10]}
     >
-      <Animated.View style={[styles.zoomContent, { transform: [{ scale: displayScale }] }]}>
-        <TouchableOpacity activeOpacity={1} onPress={handleTap}>
-          <Image
-            source={{ uri }}
-            style={styles.fullImage}
-            resizeMode="contain"
-          />
-        </TouchableOpacity>
+      <Animated.View style={styles.zoomContent}>
+        <PinchGestureHandler
+          ref={pinchRef}
+          onGestureEvent={onPinchEvent}
+          onHandlerStateChange={onPinchStateChange}
+          simultaneousHandlers={panRef}
+        >
+          <Animated.View
+            style={[
+              styles.zoomContent,
+              {
+                transform: [
+                  { scale: displayScale },
+                  { translateX },
+                  { translateY },
+                ],
+              },
+            ]}
+          >
+            <TouchableOpacity activeOpacity={1} onPress={handleTap}>
+              <Image
+                source={{ uri }}
+                style={styles.fullImage}
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
+          </Animated.View>
+        </PinchGestureHandler>
       </Animated.View>
-    </PinchGestureHandler>
+    </PanGestureHandler>
   );
 }
 

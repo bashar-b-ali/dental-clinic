@@ -138,7 +138,6 @@ export default function AddPatientScreen() {
             {([
               { label: t('male'), value: 'male' as Patient['gender'] },
               { label: t('female'), value: 'female' as Patient['gender'] },
-              { label: t('other'), value: 'other' as Patient['gender'] },
             ]).map((opt) => {
               const selected = gender === opt.value;
               return (

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SectionList } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SectionList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -52,7 +52,7 @@ export default function AppointmentsScreen() {
   const filteredAppointments = useMemo(() => {
     let result = appointments;
 
-    // If calendar is open and a date is selected, filter by that date
+    // If calendar is open and on "all" tab, filter by selected date
     if (calendarOpen && activeFilter === 'all') {
       result = result.filter((a) => a.date === selectedCalendarDate);
     } else {
@@ -207,8 +207,8 @@ export default function AppointmentsScreen() {
 
   const appointmentNoun = appointments.length === 1 ? t('appointment') : t('tab_appointments');
 
-  return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+  const ListHeader = () => (
+    <>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>{t('tab_appointments')}</Text>
@@ -240,7 +240,10 @@ export default function AppointmentsScreen() {
             <TouchableOpacity
               key={f.key}
               style={[styles.pill, activeFilter === f.key && styles.pillActive]}
-              onPress={() => setActiveFilter(f.key)}
+              onPress={() => {
+                setActiveFilter(f.key);
+                if (f.key !== 'all') setCalendarOpen(false);
+              }}
               activeOpacity={0.7}
             >
               <Text style={[styles.pillText, activeFilter === f.key && styles.pillTextActive]}>
@@ -251,40 +254,41 @@ export default function AppointmentsScreen() {
         </View>
       </View>
 
-      {/* Calendar Toggle + Calendar */}
-      <View style={styles.calendarToggleRow}>
-        <TouchableOpacity
-          style={[styles.calendarToggleBtn, calendarOpen && styles.calendarToggleBtnActive]}
-          onPress={() => {
-            setCalendarOpen(!calendarOpen);
-            if (!calendarOpen) setActiveFilter('all');
-          }}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name={calendarOpen ? 'calendar' : 'calendar-outline'}
-            size={ms(16)}
-            color={calendarOpen ? colors.textOnPrimary : colors.primary}
-          />
-          <Text style={[styles.calendarToggleText, calendarOpen && styles.calendarToggleTextActive]}>
-            {t('filterByDate')}
-          </Text>
-          <Ionicons
-            name={calendarOpen ? 'chevron-up' : 'chevron-down'}
-            size={ms(14)}
-            color={calendarOpen ? colors.textOnPrimary : colors.primary}
-          />
-        </TouchableOpacity>
-      </View>
+      {/* Calendar Toggle + Calendar (only on "All" tab) */}
+      {activeFilter === 'all' && (
+        <>
+          <View style={styles.calendarToggleRow}>
+            <TouchableOpacity
+              style={[styles.calendarToggleBtn, calendarOpen && styles.calendarToggleBtnActive]}
+              onPress={() => setCalendarOpen(!calendarOpen)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={calendarOpen ? 'calendar' : 'calendar-outline'}
+                size={ms(16)}
+                color={calendarOpen ? colors.textOnPrimary : colors.primary}
+              />
+              <Text style={[styles.calendarToggleText, calendarOpen && styles.calendarToggleTextActive]}>
+                {t('filterByDate')}
+              </Text>
+              <Ionicons
+                name={calendarOpen ? 'chevron-up' : 'chevron-down'}
+                size={ms(14)}
+                color={calendarOpen ? colors.textOnPrimary : colors.primary}
+              />
+            </TouchableOpacity>
+          </View>
 
-      {calendarOpen && (
-        <View style={styles.calendarContainer}>
-          <DatePicker
-            selectedDate={selectedCalendarDate}
-            onSelectDate={setSelectedCalendarDate}
-            appointmentDates={appointmentDates}
-          />
-        </View>
+          {calendarOpen && (
+            <View style={styles.calendarContainer}>
+              <DatePicker
+                selectedDate={selectedCalendarDate}
+                onSelectDate={setSelectedCalendarDate}
+                appointmentDates={appointmentDates}
+              />
+            </View>
+          )}
+        </>
       )}
 
       {/* Search Bar */}
@@ -306,33 +310,41 @@ export default function AppointmentsScreen() {
           />
         </View>
       </View>
+    </>
+  );
 
-      {/* Appointments List */}
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {sections.length === 0 ? (
-        search.length > 0 ? (
-          <EmptyState
-            icon="search-outline"
-            title={t('noResults')}
-            message={`${t('noPatientFound')} "${search}"`}
-          />
-        ) : (
-          <EmptyState
-            icon="calendar-outline"
-            title={emptyConfig[activeFilter].title}
-            message={emptyConfig[activeFilter].message}
-            actionLabel={t('addAppointment')}
-            onAction={() => navigation.navigate('AddAppointment')}
-          />
-        )
+        <>
+          <ListHeader />
+          {search.length > 0 ? (
+            <EmptyState
+              icon="search-outline"
+              title={t('noResults')}
+              message={`${t('noPatientFound')} "${search}"`}
+            />
+          ) : (
+            <EmptyState
+              icon="calendar-outline"
+              title={emptyConfig[activeFilter].title}
+              message={emptyConfig[activeFilter].message}
+              actionLabel={t('addAppointment')}
+              onAction={() => navigation.navigate('AddAppointment')}
+            />
+          )}
+        </>
       ) : (
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.id}
           renderItem={renderAppointmentCard}
           renderSectionHeader={renderSectionHeader}
+          ListHeaderComponent={ListHeader}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           stickySectionHeadersEnabled={false}
+          keyboardShouldPersistTaps="handled"
         />
       )}
 
@@ -424,11 +436,10 @@ const styles = StyleSheet.create({
   calendarToggleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
+    justifyContent: 'center',
     gap: spacing.xs,
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.full,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
     backgroundColor: colors.primaryBg,
     borderWidth: 1,
     borderColor: colors.primary + '30',
@@ -438,7 +449,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   calendarToggleText: {
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     fontWeight: '600',
     color: colors.primary,
   },

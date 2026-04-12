@@ -110,8 +110,8 @@ export default function PatientDetailScreen() {
   const infoItems = [
     { icon: 'call-outline' as const, label: t('phone'), value: patient.phone },
     { icon: 'mail-outline' as const, label: t('email'), value: patient.email },
-    { icon: 'person-outline' as const, label: t('age'), value: patient.age ? `${patient.age} years` : undefined },
-    { icon: 'male-female-outline' as const, label: t('gender'), value: patient.gender ? patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1) : undefined },
+    { icon: 'person-outline' as const, label: t('age'), value: patient.age ? `${patient.age} ${t('years')}` : undefined },
+    { icon: 'male-female-outline' as const, label: t('gender'), value: patient.gender ? t(patient.gender) : undefined },
   ].filter((item) => item.value);
 
   return (
@@ -290,15 +290,29 @@ export default function PatientDetailScreen() {
         </View>
 
         {/* Treatment Plans */}
-        {patientTreatmentPlans.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t('treatmentPlans')}</Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t('treatmentPlans')}</Text>
+            {patientTreatmentPlans.length > 0 && (
               <Text style={styles.appointmentCount}>
                 {patientTreatmentPlans.filter((p) => p.status === 'active').length} {t('activePlans')}
               </Text>
-            </View>
-            {patientTreatmentPlans.map((plan) => {
+            )}
+          </View>
+          {patientTreatmentPlans.length === 0 ? (
+            <Card>
+              <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
+                <Ionicons name="clipboard-outline" size={36} color={colors.textMuted} />
+                <Text style={{ fontSize: fontSize.sm, color: colors.textMuted, marginTop: spacing.sm, textAlign: 'center' }}>
+                  {t('noTreatmentPlans')}
+                </Text>
+                <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginTop: spacing.xs, textAlign: 'center' }}>
+                  {t('createTreatmentPlanHint')}
+                </Text>
+              </View>
+            </Card>
+          ) : (
+            patientTreatmentPlans.map((plan) => {
               const sessionCount = appointments.filter((a) => a.treatmentPlanId === plan.id).length;
               const isActive = plan.status === 'active';
               return (
@@ -342,9 +356,9 @@ export default function PatientDetailScreen() {
                   </View>
                 </Card>
               );
-            })}
-          </View>
-        )}
+            })
+          )}
+        </View>
 
         {/* Appointments */}
         <View style={styles.section}>
@@ -404,7 +418,7 @@ export default function PatientDetailScreen() {
                   ) : null}
 
                   <View style={styles.aptFooter}>
-                    <Text style={styles.aptAmountLabel}>Amount</Text>
+                    <Text style={styles.aptAmountLabel}>{t('amount')}</Text>
                     <Text style={styles.aptAmount}>{formatCurrency(total)}</Text>
                   </View>
                 </Card>

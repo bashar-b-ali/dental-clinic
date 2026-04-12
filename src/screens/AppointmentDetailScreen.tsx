@@ -198,7 +198,7 @@ export default function AppointmentDetailScreen() {
                 ) : null}
                 {patient.age ? (
                   <Text style={styles.patientMeta}>
-                    {patient.age} yrs{patient.gender ? ` - ${patient.gender}` : ''}
+                    {patient.age} {t('years')}{patient.gender ? ` - ${t(patient.gender)}` : ''}
                   </Text>
                 ) : null}
               </View>

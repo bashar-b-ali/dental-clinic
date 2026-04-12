@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Modal, FlatList, TextInput } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Modal, FlatList, TextInput, Keyboard, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useData } from '../context/DataContext';
@@ -14,6 +14,45 @@ import CustomAlert, { useAlert } from '../components/CustomAlert';
 import { colors, spacing, fontSize, borderRadius } from '../utils/theme';
 import { Appointment, ToothWork, MaterialUsed, ExpenseItem } from '../types';
 import { getToday, DENTAL_PROCEDURES, COMMON_MATERIALS, formatCurrency, translateProcedure, translateMaterial, getPatientName } from '../utils/helpers';
+
+// Bottom sheet wrapper that shifts up when keyboard opens
+function BottomSheetKeyboardAware({ children }: { children: React.ReactNode }) {
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      Animated.timing(translateY, {
+        toValue: -e.endCoordinates.height,
+        duration: Platform.OS === 'ios' ? e.duration || 250 : 200,
+        useNativeDriver: true,
+      }).start();
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [translateY]);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+      <Animated.View style={{ transform: [{ translateY }] }}>
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
 
 function getCurrentTime(): string {
   const now = new Date();
@@ -352,7 +391,8 @@ export default function AddAppointmentScreen() {
             onChangeText={setDiagnosis}
             placeholder={t('diagnosisPlaceholder')}
             multiline
-            numberOfLines={3}
+            numberOfLines={5}
+            scrollEnabled
             style={styles.multiline}
           />
         </Card>
@@ -603,7 +643,8 @@ export default function AddAppointmentScreen() {
             onChangeText={setNotes}
             placeholder={t('anyAdditionalNotes')}
             multiline
-            numberOfLines={4}
+            numberOfLines={5}
+            scrollEnabled
             style={styles.multiline}
           />
         </Card>
@@ -673,7 +714,7 @@ export default function AddAppointmentScreen() {
 
       {/* ---- Patient Selection Modal ---- */}
       <Modal visible={patientModalVisible} animationType="slide" transparent>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <BottomSheetKeyboardAware>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('selectPatientTitle')}</Text>
@@ -731,12 +772,12 @@ export default function AddAppointmentScreen() {
               style={styles.modalList}
             />
           </View>
-        </KeyboardAvoidingView>
+        </BottomSheetKeyboardAware>
       </Modal>
 
       {/* ---- Procedure Picker Modal ---- */}
       <Modal visible={procedureModalVisible} animationType="fade" transparent>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <BottomSheetKeyboardAware>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('selectProcedureTitle')}</Text>
@@ -831,12 +872,12 @@ export default function AddAppointmentScreen() {
               </View>
             )}
           </View>
-        </KeyboardAvoidingView>
+        </BottomSheetKeyboardAware>
       </Modal>
 
       {/* ---- Material Picker Modal ---- */}
       <Modal visible={materialModalVisible} animationType="fade" transparent>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <BottomSheetKeyboardAware>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('selectMaterialTitle')}</Text>
@@ -931,7 +972,7 @@ export default function AddAppointmentScreen() {
               </View>
             )}
           </View>
-        </KeyboardAvoidingView>
+        </BottomSheetKeyboardAware>
       </Modal>
 
       {/* ---- Expense Category Picker Modal ---- */}
@@ -984,7 +1025,7 @@ export default function AddAppointmentScreen() {
 
       {/* ---- Treatment Plan Modal ---- */}
       <Modal visible={treatmentModalVisible} animationType="fade" transparent>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <BottomSheetKeyboardAware>
           <View style={styles.modalContainerSmall}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('linkToTreatment')}</Text>
@@ -1074,7 +1115,7 @@ export default function AddAppointmentScreen() {
               </TouchableOpacity>
             )}
           </View>
-        </KeyboardAvoidingView>
+        </BottomSheetKeyboardAware>
       </Modal>
 
       {/* Custom Alert */}
@@ -1153,6 +1194,7 @@ const styles = StyleSheet.create({
   // Multiline input
   multiline: {
     minHeight: 80,
+    maxHeight: 130,
     textAlignVertical: 'top',
   },
 
